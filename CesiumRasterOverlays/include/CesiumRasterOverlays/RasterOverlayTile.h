@@ -7,10 +7,18 @@
 #include <CesiumUtility/IntrusivePointer.h>
 #include <CesiumUtility/ReferenceCounted.h>
 
+#pragma region jiangs
+#include <set>
 #include <vector>
+#pragma endregion jiangs
 
 namespace CesiumUtility {
 struct Credit;
+}
+
+namespace Cesium3DTilesSelection {
+class Tile;
+class RasterMappedTo3DTile;
 }
 
 namespace CesiumRasterOverlays {
@@ -263,5 +271,36 @@ private:
   CesiumUtility::IntrusivePointer<CesiumGltf::ImageAsset> _pImage;
   void* _pRendererResources;
   MoreDetailAvailable _moreDetailAvailable;
+
+#pragma region Das
+public:
+  /**
+   * @brief Test member variable to record Tile pointer for debugging.
+   *
+   * This is a public member variable added for testing purposes only.
+   * Not part of standard logic development.
+   */
+  Cesium3DTilesSelection::Tile* debugTilePointer = nullptr;
+
+  /**
+   * @brief Test member variable to record RasterMappedTo3DTile pointer for debugging.
+   *
+   * This is a public member variable added for testing purposes only.
+   * Not part of standard logic development.
+   */
+  Cesium3DTilesSelection::RasterMappedTo3DTile* debugRasterMappedPointer = nullptr;
+
+  /**
+   * @brief Test member variable to record multiple Tile pointers for debugging.
+   *
+   * This set stores all Tile pointers that reference this overlay tile,
+   * used for debugging sublevel streaming issues where reference counts don't match expectations.
+   */
+  std::set<Cesium3DTilesSelection::Tile*> setDebugTilePointer; // 用于调试记录引用该瓦片的所有Tile指针
+
+  bool mbDestoyed = false; // 标记瓦片是否已销毁
+
+  bool mbNeedWaitForLoad = true; // polygon无缝替换
+#pragma endregion
 };
 } // namespace CesiumRasterOverlays

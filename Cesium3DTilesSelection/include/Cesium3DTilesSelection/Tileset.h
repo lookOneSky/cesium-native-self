@@ -21,6 +21,17 @@
 #include <string>
 #include <vector>
 
+#pragma region Das
+#include <set>
+#include <Cesium3DTilesSelection/DasTilesetExtra.h>
+#pragma endregion
+
+#pragma region Das
+namespace CesiumGeospatial {
+class DasHeightCartographicPolygon;
+}
+#pragma endregion
+
 namespace Cesium3DTilesSelection {
 
 class TilesetContentManager;
@@ -35,7 +46,9 @@ class TilesetSharedAssetSystem;
  * Tiles tileset</a>, used for streaming massive heterogeneous 3D geospatial
  * datasets.
  */
-class CESIUM3DTILESSELECTION_API Tileset final {
+#pragma region Das
+class CESIUM3DTILESSELECTION_API Tileset {
+#pragma endregion
 public:
   /**
    * @brief Constructs a new instance with a given custom tileset loader.
@@ -56,11 +69,15 @@ public:
    * @param externals The external interfaces to use.
    * @param url The URL of the `tileset.json`.
    * @param options Additional options for the tileset.
+   * @param dasExtra Das扩展参数
    */
+#pragma region Das
   Tileset(
       const TilesetExternals& externals,
       const std::string& url,
-      const TilesetOptions& options = TilesetOptions());
+      const TilesetOptions& options = TilesetOptions(),
+      const DasTilesetExtra& dasExtra = DasTilesetExtra());
+#pragma endregion
 
   /**
    * @brief Constructs a new instance with the given asset ID on <a
@@ -104,7 +121,9 @@ public:
    * be notified of completion of the async portion of the tileset destruction,
    * subscribe to {@link getAsyncDestructionCompleteEvent}.
    */
-  ~Tileset() noexcept;
+#pragma region Das
+  virtual ~Tileset() noexcept;
+#pragma endregion
 
   /**
    * @brief A future that resolves when this Tileset has been destroyed (i.e.
@@ -523,6 +542,10 @@ private:
     Urgent = 2
   };
 
+#pragma region Das
+public:
+#pragma endregion
+
   struct TileLoadTask {
     /**
      * @brief The tile to be loaded.
@@ -553,9 +576,13 @@ private:
     }
   };
 
+#pragma region Das
+protected:
+#pragma endregion
+
   std::vector<TileLoadTask> _mainThreadLoadQueue;
   std::vector<TileLoadTask> _workerThreadLoadQueue;
-  std::vector<Tile*> _heightQueryLoadQueue;
+  std::vector<Tile*> _heightQueryLoadQueue;//记录高度查询需要请求的瓦块。
 
   Tile::LoadedLinkedList _loadedTiles;
 
@@ -581,6 +608,120 @@ private:
       const FrameState& frameState,
       const Tile& tile,
       const TileSelectionState& lastFrameSelectionState);
+
+public:
+  bool getLoadedTiles(std::vector<std::string>& vecTiles);
+  void clearLoadedTiles();
+
+#pragma region Das
+
+public:
+  /**
+   * @brief 设置多边形保护区域
+   * @param polygon 多边形保护区域
+   */
+  void setPolygonProtection(const CesiumGeospatial::CartographicPolygon& polygon);
+
+  /**
+   * @brief 清除多边形保护区域
+   */
+  void clearPolygonProtection();
+  
+  /**
+   * @brief 获取多边形保护区域
+   * @return 多边形保护区域的共享指针，如果未设置则返回nullptr
+   */
+  std::shared_ptr<const CesiumGeospatial::CartographicPolygon> getPolygonProtection() const;
+
+  /**
+   * @brief 添加高度编辑多边形
+   * @param polygon 高度编辑多边形
+   */
+  void addHeightPolygon(const CesiumGeospatial::DasHeightCartographicPolygon& polygon);
+
+  /**
+   * @brief 清除所有高度编辑多边形
+   */
+  void clearHeightPolygons();
+
+  /**
+   * @brief 获取高度编辑多边形数组
+   * @return 高度编辑多边形数组的引用
+   */
+  std::vector<CesiumGeospatial::DasHeightCartographicPolygon> getHeightPolygons() const;
+
+public:
+  // 获取详细加载信息
+  int getTileInLoadedQueue();
+  const ViewUpdateResult& getViewUpdateResult();
+  int numCreateTile();
+  int numDestoryTile();
+
+  /// <brief>
+  /// 手动加载
+  /// </brief>
+  // return:   void
+  void enableLoad(bool bEnable);
+  void processLoad();
+  std::vector<TileLoadTask>* getLoadQueuePtr();
+
+  /**
+   * @brief 获取高度查询加载队列指针
+   * @return 高度查询加载队列的指针
+   */
+  std::vector<Tile*>* getHeightQueryLoadQueuePtr();
+
+  /// <brief>
+  /// 缓存KTX纹理使用
+  /// </brief>
+  // return:   void
+	void beginLoadAllTilesOnce();
+  void updateLoadAllTilesOnce();
+
+  bool allChildLoaded(Tile* pTile);
+  bool addNotLoadTileToLoad(std::vector<Tile*>& vecTiles, Tile* pTile, int nNeed);
+
+  /// <brief>
+  ///
+  /// </brief>
+  // return:   bool 加载满了返回
+  // param: std::vector<Tile * > & vecTiles
+  // param: Tile * pRoot
+  // param: int nNeed
+  bool collectNotLoadTile(std::vector<Tile*>& vecTiles, Tile* pRoot, int nNeed);
+
+  /**
+   * @brief 设置包围盒向下延伸高度
+   * @param extension 向下延伸的高度，单位为米
+   */
+  void setBoundingVolumeBottomExtension(double extension);
+
+  /**
+   * @brief 获取包围盒向下延伸高度
+   * @return 向下延伸的高度，单位为米
+   */
+  double getBoundingVolumeBottomExtension() const;
+
+  int mnCreatedTiles = 0;//当前帧显示的Tile
+  int mnDestoryTiles = 0;
+public:
+#pragma region jiangs
+  bool mbSampleHeightSmallestDetailed = false; // 高度查询只采样最粗糙层级（有RenderContent即停止）
+#pragma endregion jiangs
+	bool mbRemainlevel0 = false;//不卸载第0级别
+  std::optional<int64_t> mnRemainDestorySize = std::nullopt;
+  std::optional<int64_t> mnRemainCreateSize = std::nullopt; // 限制一帧中创建的大小
+  std::optional<int64_t> mnRemainloadedTile = std::nullopt;
+
+private:
+  bool mbEanbleLoad = true;
+  bool mbBeginLoad = false;
+  std::set<std::string> msetLoadedTiles;
+  double _boundingVolumeBottomExtension = 0.0;// 包围盒向下延伸高度（米）
+
+  // 多边形保护区域
+  std::shared_ptr<CesiumGeospatial::CartographicPolygon> _polygonProtection;
+#pragma endregion
 };
 
 } // namespace Cesium3DTilesSelection

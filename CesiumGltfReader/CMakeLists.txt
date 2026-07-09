@@ -32,6 +32,9 @@ set_target_properties(CesiumGltfReader
     PUBLIC_HEADER "${CESIUM_GLTF_READER_PUBLIC_HEADERS}"
 )
 
+#add jiangs
+target_compile_definitions(CesiumGltfReader PRIVATE STB_IMAGE_WRITE_IMPLEMENTATION)
+
 target_sources(
     CesiumGltfReader
     PRIVATE

@@ -16,7 +16,11 @@
 #include <CesiumUtility/CreditSystem.h>
 #include <CesiumUtility/ReferenceCounted.h>
 
+#pragma region Das
 #include <vector>
+#include <CesiumGeospatial/Das/DasCartographicPolygon.h>
+#include <Cesium3DTilesSelection/DasTilesetExtra.h>
+#pragma endregion
 
 namespace Cesium3DTilesSelection {
 
@@ -53,11 +57,14 @@ public:
       std::unique_ptr<TilesetContentLoader>&& pLoader,
       std::unique_ptr<Tile>&& pRootTile);
 
+#pragma region Das
   TilesetContentManager(
       const TilesetExternals& externals,
       const TilesetOptions& tilesetOptions,
       RasterOverlayCollection&& overlayCollection,
-      const std::string& url);
+      const std::string& url,
+      const DasTilesetExtra& dasExtra = DasTilesetExtra());
+#pragma endregion
 
   TilesetContentManager(
       const TilesetExternals& externals,
@@ -87,7 +94,10 @@ public:
    */
   CesiumAsync::SharedFuture<void>& getRootTileAvailableEvent();
 
-  ~TilesetContentManager() noexcept;
+#pragma region Das
+  virtual ~TilesetContentManager() noexcept;
+#pragma endregion
+
 
   void loadTileContent(Tile& tile, const TilesetOptions& tilesetOptions);
 
@@ -159,7 +169,9 @@ public:
   // Transition the tile from the ContentLoaded to the Done state.
   void finishLoading(Tile& tile, const TilesetOptions& tilesetOptions);
 
-private:
+#pragma region Das
+protected:
+#pragma endregion
   static void setTileContent(
       Tile& tile,
       TileLoadResult&& result,
@@ -187,6 +199,27 @@ private:
           loadErrorCallback,
       TilesetContentLoaderResult<TilesetContentLoaderType>&& result);
 
+
+#pragma region Das
+public:
+  /**
+   * @brief 添加高度编辑多边形
+   * @param polygon 高度编辑多边形
+   */
+  void addHeightPolygon(const CesiumGeospatial::DasHeightCartographicPolygon& polygon);
+
+  /**
+   * @brief 清除所有高度编辑多边形
+   */
+  void clearHeightPolygons();
+
+  /**
+   * @brief 获取高度编辑多边形数组
+   * @return 高度编辑多边形数组的引用
+   */
+  std::vector<CesiumGeospatial::DasHeightCartographicPolygon> getHeightPolygons();
+#pragma endregion
+
   TilesetExternals _externals;
   std::vector<CesiumAsync::IAssetAccessor::THeader> _requestHeaders;
   std::unique_ptr<TilesetContentLoader> _pLoader;
@@ -207,5 +240,29 @@ private:
 
   CesiumAsync::Promise<void> _rootTileAvailablePromise;
   CesiumAsync::SharedFuture<void> _rootTileAvailableFuture;
+
+#pragma region Das
+  std::vector<CesiumGeospatial::DasHeightCartographicPolygon> _heightPolygons; // 高度编辑多边形数组
+#pragma endregion
+
+#pragma region Das
+public:
+	std::vector<std::string> mloadingTiles;//打印加载时间用
+
+  /**
+   * @brief 设置地形高度偏移值，会传递给LayerJsonTerrainLoader
+   * @param addHeight 高度偏移值，单位为米
+   */
+  void setTerrainAddHeight(double addHeight);
+
+  /**
+   * @brief 获取地形高度偏移值
+   * @return 高度偏移值，单位为米
+   */
+  double getTerrainAddHeight() const { return _dTerrainAddHeight; }
+
+private:
+  double _dTerrainAddHeight = 0.0;// 地形高度偏移值（米）
+#pragma endregion
 };
 } // namespace Cesium3DTilesSelection

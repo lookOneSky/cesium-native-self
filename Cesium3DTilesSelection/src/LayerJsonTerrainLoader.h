@@ -36,6 +36,7 @@ public:
       const std::vector<CesiumAsync::IAssetAccessor::THeader>& requestHeaders,
       const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID);
 
+#pragma region Das
   static CesiumAsync::Future<TilesetContentLoaderResult<LayerJsonTerrainLoader>>
   createLoader(
       const CesiumAsync::AsyncSystem& asyncSystem,
@@ -44,14 +45,16 @@ public:
       const std::string& layerJsonUrl,
       const std::vector<CesiumAsync::IAssetAccessor::THeader>& requestHeaders,
       const rapidjson::Document& layerJson,
-      const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID);
+      const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID,
+      double dTerrainAddHeight = 0.0);
+#pragma endregion
 
   struct Layer {
     Layer(
         const std::string& baseUrl,
         std::string&& version,
         std::vector<std::string>&& tileTemplateUrls,
-        std::string&& extensionsToRequest,
+        std::string&& extensionsToRequest,//add
         CesiumGeometry::QuadtreeRectangleAvailability&& contentAvailability,
         uint32_t maxZooms,
         int32_t availabilityLevels);
@@ -84,7 +87,10 @@ public:
 
   const std::vector<Layer>& getLayers() const noexcept;
 
-private:
+#pragma region Das
+protected:
+#pragma endregion
+
   bool tileHasUpsampledChild(const Tile& tile) const;
 
   std::vector<Tile> createTileChildrenImpl(const Tile& tile);
@@ -109,6 +115,24 @@ private:
   CesiumGeometry::QuadtreeTilingScheme _tilingScheme;
   CesiumGeospatial::Projection _projection;
   std::vector<Layer> _layers;
+
+#pragma region Das
+public:
+  /**
+   * @brief 设置地形高度偏移值
+   * @param addHeight 高度偏移值，单位为米
+   */
+  void setTerrainAddHeight(double addHeight) { _dTerrainAddHeight = addHeight; }
+
+  /**
+   * @brief 获取地形高度偏移值
+   * @return 高度偏移值，单位为米
+   */
+  double getTerrainAddHeight() const { return _dTerrainAddHeight; }
+
+private:
+  double _dTerrainAddHeight = 0.0;// 地形高度偏移值（米）
+#pragma endregion
 };
 
 } // namespace Cesium3DTilesSelection

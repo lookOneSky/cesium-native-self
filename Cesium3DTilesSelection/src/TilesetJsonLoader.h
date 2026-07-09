@@ -13,6 +13,10 @@
 #include <string>
 #include <vector>
 
+#pragma region Das
+#include <CesiumGeospatial/Das/DasCartographicPolygon.h>
+#pragma endregion
+
 namespace Cesium3DTilesSelection {
 class TilesetJsonLoader : public TilesetContentLoader {
 public:
@@ -35,6 +39,20 @@ public:
 
   void addChildLoader(std::unique_ptr<TilesetContentLoader> pLoader);
 
+#pragma region Das
+  /**
+   * @brief 设置高度编辑多边形数组
+   * @param heightPolygons 高度编辑多边形数组
+   */
+  void setHeightPolygons(const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>& heightPolygons);
+
+  /**
+   * @brief 获取高度编辑多边形数组
+   * @return 高度编辑多边形数组的引用
+   */
+  const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>& getHeightPolygons() const noexcept;
+#pragma endregion
+
   static CesiumAsync::Future<TilesetContentLoaderResult<TilesetJsonLoader>>
   createLoader(
       const TilesetExternals& externals,
@@ -50,7 +68,11 @@ public:
       const std::string& tilesetJsonUrl,
       const CesiumAsync::HttpHeaders& requestHeaders,
       const rapidjson::Document& tilesetJson,
-      const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID);
+      const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID
+#pragma region Das
+      ,const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>* pHeightPolygons = nullptr
+#pragma endregion
+      );
 
 private:
   std::string _baseUrl;
@@ -70,5 +92,9 @@ private:
   CesiumGeometry::Axis _upAxis;
 
   std::vector<std::unique_ptr<TilesetContentLoader>> _children;
+
+#pragma region Das
+  std::vector<CesiumGeospatial::DasHeightCartographicPolygon> _heightPolygons; // 高度编辑多边形数组
+#pragma endregion
 };
 } // namespace Cesium3DTilesSelection

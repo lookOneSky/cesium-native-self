@@ -47,6 +47,11 @@ public:
    */
   static /*constexpr*/ const Ellipsoid WGS84;
 
+#pragma region Das
+  static /*constexpr*/ const Ellipsoid CGCS2000;
+#pragma endregion
+
+
   /**
    * @brief An Ellipsoid with all three radii set to one meter.
    */

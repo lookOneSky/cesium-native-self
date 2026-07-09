@@ -56,6 +56,10 @@ public:
           CesiumRasterOverlays::RasterOverlayTile>& pRasterTile,
       int32_t textureCoordinateIndex);
 
+#pragma region Das
+  ~RasterMappedTo3DTile();
+#pragma endregion
+
   /**
    * @brief Returns a {@link CesiumRasterOverlays::RasterOverlayTile} that is currently loading.
    *
@@ -241,6 +245,12 @@ private:
   glm::dvec2 _scale;
   AttachmentState _state;
   bool _originalFailed;
+
+#pragma region Das
+  bool mbDestroyed = false;
+public:
+  bool mbNeedWaitForLoad = true;//polyogon无缝替换
+#pragma endregion
 };
 
 } // namespace Cesium3DTilesSelection

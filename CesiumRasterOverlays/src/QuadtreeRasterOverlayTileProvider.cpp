@@ -32,6 +32,10 @@
 #include <utility>
 #include <vector>
 
+#pragma region Das
+#include <CesiumUtility/SpanHelper.h>
+#pragma endregion
+
 using namespace CesiumAsync;
 using namespace CesiumGeometry;
 using namespace CesiumGeospatial;
@@ -39,6 +43,10 @@ using namespace CesiumGltf;
 using namespace CesiumGltfContent;
 using namespace CesiumGltfReader;
 using namespace CesiumUtility;
+
+#pragma region Das
+// #define SHOW_TILE_BOUNDARIES 1
+#pragma endregion
 
 namespace {
 
@@ -121,7 +129,11 @@ QuadtreeRasterOverlayTileProvider::QuadtreeRasterOverlayTileProvider(
                     // Highlight the edges in red to show tile boundaries.
                     std::span<uint32_t> pixels =
                         reintepretCastSpan<uint32_t, std::byte>(
-                            loaded.image->pixelData);
+#pragma region Das
+                            std::span<std::byte>(
+                            loaded.pImage->pixelData));
+#pragma endregion
+
                     for (int32_t j = 0; j < loaded.pImage->height; ++j) {
                       for (int32_t i = 0; i < loaded.pImage->width; ++i) {
                         if (i == 0 || j == 0 || i == loaded.pImage->width - 1 ||
@@ -459,6 +471,7 @@ void blitImage(
 
 } // namespace
 
+//入口
 CesiumAsync::Future<LoadedRasterOverlayImage>
 QuadtreeRasterOverlayTileProvider::loadTileImage(
     RasterOverlayTile& overlayTile) {

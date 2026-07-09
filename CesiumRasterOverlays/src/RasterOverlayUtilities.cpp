@@ -60,6 +60,7 @@ RasterOverlayUtilities::createRasterOverlayTextureCoordinates(
     bool invertVCoordinate,
     const std::string_view& textureCoordinateAttributeBaseName,
     int32_t firstTextureCoordinateID) {
+  //add das  计算ovlerlay uv
   if (projections.empty()) {
     return std::nullopt;
   }

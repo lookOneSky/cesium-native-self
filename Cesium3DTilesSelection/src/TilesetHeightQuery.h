@@ -106,7 +106,11 @@ public:
   void findCandidateTiles(
       Tile* pTile,
       Tile::LoadedLinkedList& loadedTiles,
-      std::vector<std::string>& outWarnings);
+      std::vector<std::string>& outWarnings
+#pragma region jiangs
+      , bool smallestDetailedOnly = false
+#pragma endregion jiangs
+      );
 };
 
 /**
@@ -145,7 +149,11 @@ struct TilesetHeightRequest {
       const TilesetOptions& options,
       Tile::LoadedLinkedList& loadedTiles,
       std::list<TilesetHeightRequest>& heightRequests,
-      std::vector<Tile*>& heightQueryLoadQueue);
+      std::vector<Tile*>& heightQueryLoadQueue
+#pragma region jiangs
+      , bool smallestDetailedOnly = false
+#pragma endregion jiangs
+      );
 
   /**
    * @brief Cancels all outstanding height requests and rejects the associated
@@ -178,7 +186,11 @@ struct TilesetHeightRequest {
       TilesetContentManager& contentManager,
       const TilesetOptions& options,
       Tile::LoadedLinkedList& loadedTiles,
-      std::set<Tile*>& tileLoadSet);
+      std::set<Tile*>& tileLoadSet
+#pragma region jiangs
+      , bool smallestDetailedOnly = false
+#pragma endregion jiangs
+      );
 };
 
 } // namespace Cesium3DTilesSelection

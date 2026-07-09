@@ -16,6 +16,54 @@
 #include <span>
 #include <string>
 
+#pragma region Das
+#include <sstream>
+#include <openssl/md5.h>
+#include <iomanip>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <cstdlib> // For system()
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <stb_image_write.h>
+
+#include <ktx.h>
+
+#include <fstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+//KTX纹理设置
+//#define USE_OUTSIDE_KTX_TEX
+//#define CREATE_OUTSIDE_KTX_TEX
+
+namespace fs = std::filesystem;
+
+#define Cache_Path "./Cache/"
+
+//std::string calculateMD5(const std::span<const std::byte>& data) {
+//  // MD5 digest is 16 bytes
+//  unsigned char digest[MD5_DIGEST_LENGTH];
+//
+//  // Compute the MD5 hash
+//  MD5(reinterpret_cast<const unsigned char*>(data.data()), data.size(), digest);
+//
+//  // Convert the digest to a hexadecimal string
+//  std::ostringstream md5String;
+//  for (int i = 0; i < MD5_DIGEST_LENGTH; ++i) {
+//    md5String << std::hex << std::setw(2) << std::setfill('0')
+//              << static_cast<int>(digest[i]);
+//  }
+//
+//  return md5String.str();
+//}
+
+#pragma endregion
+
 #define STBI_FAILURE_USERMSG
 
 #define STB_IMAGE_STATIC
@@ -60,8 +108,139 @@ bool isWebP(const std::span<const std::byte>& data) {
 
 } // namespace
 
+#pragma region Das
+void ensureDirectoryExists(const std::string& filePath)
+{
+  // 提取文件夹路径
+  fs::path folderPath = fs::path(filePath).parent_path();
+
+  // 检查并创建文件夹
+  if (!folderPath.empty() && !fs::exists(folderPath)) {
+    if (!fs::create_directories(folderPath)) {
+      throw std::runtime_error(
+          "Failed to create directory: " + folderPath.string());
+    }
+  }
+}
+
+ImageReaderResult ImageDecoder::readImage(const std::span<const std::byte>& data, const Ktx2TranscodeTargets& ktx2TranscodeTargets)
+{
+	CESIUM_TRACE("CesiumGltfReader::readImage");
+
+#ifdef USE_OUTSIDE_KTX_TEX
+	bool isKTX = isKtx(data);
+	if (!isKTX)
+  {
+		ImageReaderResult result;
+		// 不是ktx纹理，纹理加载最耗时
+		std::string md5Hash = calculateMD5(data);
+		std::string ktx2FilePath = Cache_Path + md5Hash + ".ktx2";
+		if (fs::exists(ktx2FilePath)) {
+			// 如果文件存在，直接读取 KTX2 文件
+			std::ifstream ktx2File(ktx2FilePath, std::ios::binary | std::ios::ate);
+			if (!ktx2File) {
+				result.errors.emplace_back("Failed to open KTX2 file: " + ktx2FilePath);
+				return readImageSrc(data, ktx2TranscodeTargets);
+			}
+
+			std::streamsize size = ktx2File.tellg();
+			ktx2File.seekg(0, std::ios::beg);
+
+			std::vector<std::byte> ktx2Data(static_cast<size_t>(size));
+			if (!ktx2File.read(reinterpret_cast<char*>(ktx2Data.data()), size)) {
+				result.errors.emplace_back("Failed to read KTX2 file: " + ktx2FilePath);
+				return result;
+			}
+
+			// 使用 KTX2 数据调用现有逻辑
+			return readImageSrc(ktx2Data, ktx2TranscodeTargets);
+		}
+		else
+    {
+#ifdef CREATE_OUTSIDE_KTX_TEX
+			//return readImageSrc(data, ktx2TranscodeTargets);
+			CesiumGltf::ImageAsset& image = result.pImage.emplace();
+			// 4. 如果 KTX2 文件不存在，保存 WebP 数据到临时文件
+			std::string tempWebPFilePath = Cache_Path + md5Hash + ".png";
+			ensureDirectoryExists(tempWebPFilePath);
+			if (WebPGetInfo(
+				reinterpret_cast<const uint8_t*>(data.data()),
+				data.size(),
+				&image.width,
+				&image.height)) {
+				image.channels = 4;
+				image.bytesPerChannel = 1;
+				uint8_t* pImage = nullptr;
+				const auto bufferSize = image.width * image.height * image.channels;
+				image.pixelData.resize(static_cast<std::size_t>(bufferSize));
+				pImage = WebPDecodeRGBAInto(
+					reinterpret_cast<const uint8_t*>(data.data()),
+					data.size(),
+					reinterpret_cast<uint8_t*>(image.pixelData.data()),
+					image.pixelData.size(),
+					image.width * image.channels);
+
+				// 假设 `image.pixelData` 包含解码后的 RGBA 数据
+				if (!stbi_write_png(
+					tempWebPFilePath.c_str(),
+					image.width,
+					image.height,
+					image.channels,
+					image.pixelData.data(),
+					image.width * image.channels)) {
+					result.errors.emplace_back(
+						"Failed to create temporary PNG file: " + tempWebPFilePath);
+					return readImageSrc(data, ktx2TranscodeTargets);
+				}
+
+				// 5. 使用 toktx 转换 WebP 为 KTX2
+        std::string command = "toktx --bcmp --t2 --target_type RGBA " +
+          ktx2FilePath + " " + tempWebPFilePath;
+				int retCode = std::system(command.c_str());
+				if (retCode != 0) {
+					result.errors.emplace_back(
+						"Failed to convert WebP to KTX2 using toktx. Command: " +
+						command);
+					fs::remove(ktx2FilePath);
+					return readImageSrc(data, ktx2TranscodeTargets);
+				}
+
+				// 6. 删除临时 WebP 文件
+				fs::remove(tempWebPFilePath);
+
+				// 7. 读取生成的 KTX2 文件
+				std::ifstream ktx2File(ktx2FilePath, std::ios::binary | std::ios::ate);
+				if (!ktx2File)
+        {
+					result.errors.emplace_back(
+						"Failed to open generated KTX2 file: " + ktx2FilePath);
+					return readImageSrc(data, ktx2TranscodeTargets);
+				}
+
+				std::streamsize size = ktx2File.tellg();
+				ktx2File.seekg(0, std::ios::beg);
+
+				std::vector<std::byte> ktx2Data(static_cast<size_t>(size));
+				if (!ktx2File.read(reinterpret_cast<char*>(ktx2Data.data()), size))
+        {
+					result.errors.emplace_back(
+						"Failed to read generated KTX2 file: " + ktx2FilePath);
+					return readImageSrc(data, ktx2TranscodeTargets);
+				}
+
+				// 使用 KTX2 数据调用现有逻辑
+				return readImageSrc(ktx2Data, ktx2TranscodeTargets);
+			}
+ #endif
+		}
+	}
+#endif
+	return readImageSrc(data, ktx2TranscodeTargets);
+}
+#pragma endregion
+
 /*static*/
-ImageReaderResult ImageDecoder::readImage(
+ImageReaderResult ImageDecoder::readImageSrc(
     const std::span<const std::byte>& data,
     const Ktx2TranscodeTargets& ktx2TranscodeTargets) {
   CESIUM_TRACE("CesiumGltfReader::readImage");

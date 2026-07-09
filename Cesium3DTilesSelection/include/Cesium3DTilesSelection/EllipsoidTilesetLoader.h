@@ -43,24 +43,25 @@ public:
       const CesiumAsync::AsyncSystem& asyncSystem,
       std::vector<CesiumGeospatial::Cartographic>&& positions) override;
 
-private:
+#pragma region Das
+protected:
   struct Geometry {
     std::vector<uint16_t> indices;
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec3> normals;
   };
 
-  void createChildTile(
+  virtual void createChildTile(
       const Tile& parent,
       std::vector<Tile>& children,
       const CesiumGeometry::QuadtreeTileID& childID) const;
 
-  CesiumGeospatial::BoundingRegion
-  createBoundingRegion(const CesiumGeometry::QuadtreeTileID& quadtreeID) const;
-  Geometry createGeometry(const Tile& tile) const;
-  CesiumGltf::Model createModel(const Geometry& geometry) const;
+  virtual CesiumGeospatial::BoundingRegion createBoundingRegion(const CesiumGeometry::QuadtreeTileID& quadtreeID) const;
+  virtual Geometry createGeometry(const Tile& tile) const;
+  virtual CesiumGltf::Model createModel(const Geometry& geometry) const;
 
   CesiumGeospatial::GeographicProjection _projection;
   CesiumGeometry::QuadtreeTilingScheme _tilingScheme;
+#pragma endregion
 };
 } // namespace Cesium3DTilesSelection

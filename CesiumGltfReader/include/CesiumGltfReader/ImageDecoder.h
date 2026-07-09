@@ -55,6 +55,10 @@ public:
       const std::span<const std::byte>& data,
       const CesiumGltf::Ktx2TranscodeTargets& ktx2TranscodeTargets);
 
+    static ImageReaderResult readImageSrc(
+      const std::span<const std::byte>& data,
+      const CesiumGltf::Ktx2TranscodeTargets& ktx2TranscodeTargets);
+
   /**
    * @brief Generate mipmaps for this image.
    *

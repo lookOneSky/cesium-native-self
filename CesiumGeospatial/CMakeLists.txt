@@ -5,6 +5,11 @@ configure_cesium_library(CesiumGeospatial)
 cesium_glob_files(CESIUM_GEOSPATIAL_SOURCES src/*.cpp)
 cesium_glob_files(CESIUM_GEOSPATIAL_HEADERS src/*.h)
 cesium_glob_files(CESIUM_GEOSPATIAL_PUBLIC_HEADERS include/CesiumGeospatial/*.h)
+
+# Das: Add Das folder sources and headers
+cesium_glob_files(CESIUM_GEOSPATIAL_DAS_SOURCES src/Das/*.cpp)
+cesium_glob_files(CESIUM_GEOSPATIAL_DAS_HEADERS src/Das/*.h)
+cesium_glob_files(CESIUM_GEOSPATIAL_DAS_PUBLIC_HEADERS include/CesiumGeospatial/Das/*.h)
 cesium_glob_files(CESIUM_GEOSPATIAL_TEST_SOURCES test/*.cpp)
 cesium_glob_files(CESIUM_GEOSPATIAL_TEST_HEADERS test/*.h)
 
@@ -17,7 +22,8 @@ set_target_properties(CesiumGeospatial
 
 set_target_properties(CesiumGeospatial
     PROPERTIES
-    PUBLIC_HEADER "${CESIUM_GEOSPATIAL_PUBLIC_HEADERS}"
+    # Das: Add Das public headers
+    PUBLIC_HEADER "${CESIUM_GEOSPATIAL_PUBLIC_HEADERS};${CESIUM_GEOSPATIAL_DAS_PUBLIC_HEADERS}" 
 )
 
 target_sources(
@@ -25,8 +31,11 @@ target_sources(
     PRIVATE
         ${CESIUM_GEOSPATIAL_SOURCES}
         ${CESIUM_GEOSPATIAL_HEADERS}
+        ${CESIUM_GEOSPATIAL_DAS_SOURCES} # Das: Add Das sources
+        ${CESIUM_GEOSPATIAL_DAS_HEADERS} # Das: Add Das headers
     PUBLIC
         ${CESIUM_GEOSPATIAL_PUBLIC_HEADERS}
+        ${CESIUM_GEOSPATIAL_DAS_PUBLIC_HEADERS} # Das: Add Das public headers
 )
 
 cesium_target_include_directories(

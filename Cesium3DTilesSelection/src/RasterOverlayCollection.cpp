@@ -23,6 +23,10 @@
 #include <exception>
 #include <utility>
 #include <vector>
+#include <chrono>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
 
 using namespace CesiumGeometry;
 using namespace CesiumGeospatial;
@@ -49,6 +53,41 @@ const std::vector<CesiumUtility::IntrusivePointer<RasterOverlay>>
 const std::vector<CesiumUtility::IntrusivePointer<RasterOverlayTileProvider>>
     emptyTileProviders{};
 
+#pragma region Das 
+// 递归收集所有子Tile到列表中
+void collectAllTiles(Tile& tile, std::vector<Tile*>& allTiles) {
+  allTiles.push_back(&tile);
+
+  // 递归收集所有子Tile
+  std::span<Tile> children = tile.getChildren();
+  for (Tile& child : children) {
+    collectAllTiles(child, allTiles);
+  }
+}
+
+// 从LoadedLinkedList中获取根Tile，然后收集所有Tile
+std::vector<Tile*> getAllTilesFromRoot(Tile::LoadedLinkedList& list) {
+  std::vector<Tile*> allTiles;
+
+  Tile* pFirst = list.head();
+  if (!pFirst) {
+    return allTiles;
+  }
+
+  // 从第一个Tile找到根Tile
+  Tile* pRoot = pFirst;
+  while (pRoot->getParent() != nullptr) {
+    pRoot = pRoot->getParent();
+  }
+
+  // 从根Tile递归收集所有Tile
+  collectAllTiles(*pRoot, allTiles);
+
+  return allTiles;
+}
+#pragma endregion
+
+
 } // namespace
 
 RasterOverlayCollection::RasterOverlayCollection(
@@ -58,7 +97,11 @@ RasterOverlayCollection::RasterOverlayCollection(
     : _pLoadedTiles(&loadedTiles),
       _externals{externals},
       _ellipsoid(ellipsoid),
-      _pOverlays(nullptr) {}
+      _pOverlays(nullptr)
+{
+  int a = 0;
+  a++;
+}
 
 RasterOverlayCollection::~RasterOverlayCollection() noexcept {
   if (this->_pOverlays) {
@@ -178,30 +221,89 @@ void RasterOverlayCollection::remove(
   // Remove all mappings of this overlay to geometry tiles.
   auto removeCondition = [pOverlay](
                              const RasterMappedTo3DTile& mapped) noexcept {
-    return (
+
+#pragma region Das
+			//3Dtiles raterOverlay PlaceHolder释放
+			if (mapped.getLoadingTile() && mapped.getLoadingTile()->getState() == RasterOverlayTile::LoadState::Placeholder && pOverlay == &mapped.getLoadingTile()->getTileProvider().getOwner())
+			{
+				int a = 0;
+				a++;
+				return true;
+			}
+#pragma endregion
+    
+    bool bRemove = (
         (mapped.getLoadingTile() &&
          pOverlay == &mapped.getLoadingTile()->getTileProvider().getOwner()) ||
         (mapped.getReadyTile() &&
          pOverlay == &mapped.getReadyTile()->getTileProvider().getOwner()));
+
+    if (!bRemove)
+    {
+      int a = 0;
+      a++;
+    }
+
+    return bRemove;
   };
+
+#pragma region Das
+  //// 生成带时间戳的文件名，记录所有遍历到的tile ID
+  // auto now = std::chrono::system_clock::now();
+  // auto time_t_now = std::chrono::system_clock::to_time_t(now);
+  // std::tm tm_now;
+  // localtime_s(&tm_now, &time_t_now);
+
+  // std::ostringstream ossFileName;
+  // ossFileName << "TileIDs_"
+  //             << std::put_time(&tm_now, "%Y%m%d_%H%M%S")
+  //             << ".txt";
+
+  // std::ofstream logFile(ossFileName.str());
+  // if (logFile.is_open()) {
+  //   logFile << "Tile IDs traversed at: "
+  //           << std::put_time(&tm_now, "%Y-%m-%d %H:%M:%S")
+  //           << "\n\n";
+  // }
+#pragma endregion
 
   auto pPrepareRenderResources =
       this->_externals.pPrepareRendererResources.get();
-  forEachTile(
-      *this->_pLoadedTiles,
-      [&removeCondition, pPrepareRenderResources](Tile& tile) {
+
+#pragma region Das
+  // 获取所有Tile（包括未加载的）而不仅仅是LoadedTiles
+  std::vector<Tile*> allTiles = getAllTilesFromRoot(*this->_pLoadedTiles);
+  for (Tile* pTile : allTiles) {
+    Tile& tile = *pTile;
+
+        //// 记录当前tile的ID
+        //if (logFile.is_open()) {
+        //  const TileID& tileID = tile.getTileID();
+        //  if (const std::string* pStrID = std::get_if<std::string>(&tileID)) {
+        //    logFile << "Tile ID (string): " << *pStrID << "\n";
+        //  }
+        //}
+#pragma endregion
+
         std::vector<RasterMappedTo3DTile>& mapped = tile.getMappedRasterTiles();
 
         for (RasterMappedTo3DTile& rasterTile : mapped) {
           if (removeCondition(rasterTile)) {
             rasterTile.detachFromTile(*pPrepareRenderResources, tile);
           }
+#pragma region Das
+          else {
+            int a = 0;
+            a++;
+          }
+#pragma endregion
         }
 
-        auto firstToRemove =
-            std::remove_if(mapped.begin(), mapped.end(), removeCondition);
-        mapped.erase(firstToRemove, mapped.end());
-      });
+    auto firstToRemove =
+        std::remove_if(mapped.begin(), mapped.end(), removeCondition);
+    mapped.erase(firstToRemove, mapped.end());
+  }
+#pragma endregion
 
   OverlayList& list = *this->_pOverlays;
 

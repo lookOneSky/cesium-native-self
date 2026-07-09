@@ -97,6 +97,9 @@ public:
    * @param enableWaterMask If true, will attempt to load a water mask from the
    * quantized mesh data.
    * @param ellipsoid The ellipsoid to use for this quantized mesh.
+   * #region das
+   * @param addHeight Additional height offset in meters to add to all vertices.
+   * #endregion das
    * @return The {@link QuantizedMeshLoadResult}
    */
   static QuantizedMeshLoadResult load(
@@ -105,7 +108,11 @@ public:
       const std::string& url,
       const std::span<const std::byte>& data,
       bool enableWaterMask,
-      const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID);
+      const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID,
+#pragma region das
+      double addHeight = 0.0
+#pragma endregion
+      );
 
   /**
    * @brief Parses the metadata (tile availability) from the given

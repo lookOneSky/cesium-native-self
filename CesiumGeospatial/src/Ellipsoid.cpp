@@ -15,6 +15,11 @@ using namespace CesiumUtility;
 namespace CesiumGeospatial {
 
 const Ellipsoid Ellipsoid::WGS84(6378137.0, 6378137.0, 6356752.3142451793);
+#pragma region Das
+const Ellipsoid Ellipsoid::CGCS2000(6378137.0, 6378137.0, 6356752.31414);
+#pragma endregion
+
+
 const Ellipsoid Ellipsoid::UNIT_SPHERE(1.0, 1.0, 1.0);
 
 glm::dvec3

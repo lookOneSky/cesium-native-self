@@ -186,7 +186,11 @@ void markTileVisited(Tile::LoadedLinkedList& loadedTiles, Tile* pTile) {
 void TilesetHeightQuery::findCandidateTiles(
     Tile* pTile,
     Tile::LoadedLinkedList& loadedTiles,
-    std::vector<std::string>& warnings) {
+    std::vector<std::string>& warnings
+#pragma region jiangs
+    , bool smallestDetailedOnly
+#pragma endregion jiangs
+    ) {
   // Make sure this tile is not unloaded until we're done with it.
   markTileVisited(loadedTiles, pTile);
 
@@ -243,6 +247,17 @@ void TilesetHeightQuery::findCandidateTiles(
       }
     }
 
+
+#pragma region jiangs
+    if (smallestDetailedOnly &&
+        pTile->getContent().getRenderContent() != nullptr) {
+      pTile->incrementDoNotUnloadSubtreeCount(
+          "TilesetHeightQuery::findCandidateTiles smallestDetailed stop");
+      this->candidateTiles.push_back(pTile);
+      return;
+    }
+#pragma endregion jiangs
+
     // Traverse children
     for (Tile& child : pTile->getChildren()) {
       // if bounding volume doesn't intersect this ray, we can skip it
@@ -254,7 +269,11 @@ void TilesetHeightQuery::findCandidateTiles(
         continue;
 
       // Child is a candidate, traverse it and its children
-      findCandidateTiles(&child, loadedTiles, warnings);
+      findCandidateTiles(&child, loadedTiles, warnings
+#pragma region jiangs
+          , smallestDetailedOnly
+#pragma endregion jiangs
+          );
     }
   }
 }
@@ -265,7 +284,11 @@ void TilesetHeightQuery::findCandidateTiles(
     const TilesetOptions& options,
     Tile::LoadedLinkedList& loadedTiles,
     std::list<TilesetHeightRequest>& heightRequests,
-    std::vector<Tile*>& heightQueryLoadQueue) {
+    std::vector<Tile*>& heightQueryLoadQueue
+#pragma region jiangs
+    , bool smallestDetailedOnly
+#pragma endregion jiangs
+    ) {
   if (heightRequests.empty())
     return;
 
@@ -279,7 +302,11 @@ void TilesetHeightQuery::findCandidateTiles(
             contentManager,
             options,
             loadedTiles,
-            tileLoadSet)) {
+            tileLoadSet
+#pragma region jiangs
+            , smallestDetailedOnly
+#pragma endregion jiangs
+            )) {
       ++it;
     } else {
       auto deleteIt = it;
@@ -325,12 +352,17 @@ void Cesium3DTilesSelection::TilesetHeightRequest::failHeightRequests(
   heightRequests.clear();
 }
 
+//获取需要加载的瓦块队列
 bool TilesetHeightRequest::tryCompleteHeightRequest(
     const AsyncSystem& asyncSystem,
     TilesetContentManager& contentManager,
     const TilesetOptions& options,
     Tile::LoadedLinkedList& loadedTiles,
-    std::set<Tile*>& tileLoadSet) {
+    std::set<Tile*>& tileLoadSet
+#pragma region jiangs
+    , bool smallestDetailedOnly
+#pragma endregion jiangs
+    ) {
   // If this TilesetContentLoader supports direct height queries, use that
   // instead of downloading tiles.
   if (contentManager.getRootTile() &&
@@ -364,7 +396,11 @@ bool TilesetHeightRequest::tryCompleteHeightRequest(
       query.findCandidateTiles(
           contentManager.getRootTile(),
           loadedTiles,
-          warnings);
+          warnings
+#pragma region jiangs
+          , smallestDetailedOnly
+#pragma endregion jiangs
+          );
     } else {
       // Refine the current set of candidate tiles, in case further tiles from
       // implicit tiling, external tilesets, etc. having been loaded since last
@@ -383,7 +419,11 @@ bool TilesetHeightRequest::tryCompleteHeightRequest(
         TileLoadState loadState = pCandidate->getState();
         if (!pCandidate->getChildren().empty() &&
             loadState >= TileLoadState::ContentLoaded) {
-          query.findCandidateTiles(pCandidate, loadedTiles, warnings);
+          query.findCandidateTiles(pCandidate, loadedTiles, warnings
+#pragma region jiangs
+              , smallestDetailedOnly
+#pragma endregion jiangs
+              );
         } else {
           // Make sure this tile stays loaded.
           markTileVisited(loadedTiles, pCandidate);

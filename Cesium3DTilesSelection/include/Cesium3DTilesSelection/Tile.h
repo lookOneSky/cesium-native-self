@@ -23,6 +23,12 @@
 #include <unordered_map>
 #endif
 
+#pragma region Das
+namespace CesiumGeospatial {
+class CartographicPolygon;
+}
+#pragma endregion
+
 namespace Cesium3DTilesSelection {
 class TilesetContentLoader;
 
@@ -330,9 +336,10 @@ public:
    *
    * @return Whether to uncoditionally refine this tile.
    */
-  bool getUnconditionallyRefine() const noexcept {
-    return glm::isinf(this->_geometricError);
-  }
+  #pragma region Das
+  bool getUnconditionallyRefine() const;
+  #pragma endregion
+  
 
   /**
    * @brief Marks that this tile should be unconditionally refined.
@@ -599,6 +606,19 @@ private:
 
   void setMightHaveLatentChildren(bool mightHaveLatentChildren) noexcept;
 
+#pragma region Das
+public:
+  void setSlowLoad(bool value) const;
+  bool isSlowLoad() const;
+  int calLevel();
+  
+  // 多边形保护区域相关方法
+  bool checkPolygonIntersection(std::shared_ptr<const CesiumGeospatial::CartographicPolygon> polygon) const;
+
+private:
+#pragma endregion
+    
+
   // Position in bounding-volume hierarchy.
   Tile* _pParent;
   std::vector<Tile> _children;
@@ -639,6 +659,15 @@ public:
    */
   typedef CesiumUtility::DoublyLinkedList<Tile, &Tile::_loadedTilesLinks>
       LoadedLinkedList;
+
+ private:
+#pragma region Das
+   mutable bool mbSlowLoad = false;//标记的加载慢的瓦块
+   
+   // 多边形保护区域相关
+   mutable bool mbIntersectsPolygon = false; // 是否与多边形保护区域相交
+   mutable std::shared_ptr<const CesiumGeospatial::CartographicPolygon> mCachedPolygon; // 缓存的多边形指针
+#pragma endregion
 };
 
 } // namespace Cesium3DTilesSelection

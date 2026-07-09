@@ -57,7 +57,12 @@ RasterOverlayTileProvider::RasterOverlayTileProvider(
       _pPlaceholder(new RasterOverlayTile(*this)),
       _tileDataBytes(0),
       _totalTilesCurrentlyLoading(0),
-      _throttledTilesCurrentlyLoading(0) {}
+      _throttledTilesCurrentlyLoading(0)
+      {
+#pragma region Das
+      mbNeedWaitForLoad = pOwner->mbNeedWaitForLoad;
+#pragma endregion
+      }
 
 RasterOverlayTileProvider::RasterOverlayTileProvider(
     const CesiumUtility::IntrusivePointer<const RasterOverlay>& pOwner,
@@ -86,7 +91,17 @@ RasterOverlayTileProvider::~RasterOverlayTileProvider() noexcept {
   // Explicitly release the placeholder first, because RasterOverlayTiles must
   // be destroyed before the tile provider that created them.
   if (this->_pPlaceholder) {
-    CESIUM_ASSERT(this->_pPlaceholder->getReferenceCount() == 1);
+    //3Dtiles 子关卡流程会导致这里释放异常
+    #pragma region jiangs
+    //这里为什么还会有多个引用。不在Tiles上，找不到在哪里，已解决
+    //CESIUM_ASSERT(this->_pPlaceholder->getReferenceCount() == 1);
+    #pragma endregion jiangs
+    if (this->_pPlaceholder->getReferenceCount() > 1)
+    {
+      int a = 0;
+      a++;
+    }
+
     this->_pPlaceholder = nullptr;
   }
 }

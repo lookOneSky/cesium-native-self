@@ -9,6 +9,14 @@
 #include <CesiumUtility/Assert.h>
 #include <CesiumUtility/Math.h>
 
+#pragma region Das
+#include <CesiumGeospatial/CartographicPolygon.h>
+#include <CesiumGeospatial/BoundingRegion.h>
+#include <CesiumGeospatial/GlobeRectangle.h>
+#include <CesiumGeospatial/Ellipsoid.h>
+#include <Cesium3DTilesSelection/BoundingVolume.h>
+#pragma endregion
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -19,6 +27,7 @@
 
 #ifdef CESIUM_DEBUG_TILE_UNLOADING
 #include <unordered_map>
+#include "Tile.h"
 #endif
 
 using namespace CesiumGeometry;
@@ -279,6 +288,16 @@ bool Tile::isRenderable() const noexcept {
           this->_rasterTiles.begin(),
           this->_rasterTiles.end(),
           [](const RasterMappedTo3DTile& rasterTile) noexcept {
+#pragma region jiangs
+            if(rasterTile.getReadyTile() == nullptr)
+            {
+              if (!rasterTile.mbNeedWaitForLoad)
+              {
+                return true;
+              }
+            }
+#pragma endregion jiangs
+
             return rasterTile.getReadyTile() != nullptr;
           });
     }
@@ -316,6 +335,33 @@ bool Tile::getMightHaveLatentChildren() const noexcept {
 void Tile::setMightHaveLatentChildren(bool mightHaveLatentChildren) noexcept {
   this->_mightHaveLatentChildren = mightHaveLatentChildren;
 }
+
+#pragma region Das
+void Tile::setSlowLoad(bool slowLoad) const
+{
+	this->mbSlowLoad = slowLoad;
+}
+
+// 获取 slowLoad 标记
+bool Tile::isSlowLoad() const
+{
+	return this->mbSlowLoad;
+}
+int Tile::calLevel()
+{
+  Tile* pTile = this;
+	int nLevel = 0;
+  while (pTile->getParent())
+  {
+    nLevel++;
+    pTile = pTile->getParent();
+  }
+
+  return nLevel;
+}
+#pragma endregion
+
+
 
 void Tile::clearChildren() noexcept {
   CESIUM_ASSERT(this->_doNotUnloadSubtreeCount == 0);
@@ -394,5 +440,85 @@ void Tile::decrementDoNotUnloadSubtreeCount(
     pTile = pTile->getParent();
   }
 }
+
+#pragma region Das
+bool Tile::getUnconditionallyRefine() const{
+
+#pragma region Das
+    // 检查是否有TileContent且是RenderContent（Model类型）
+    const TileContent& content = this->getContent();
+    if (content.isRenderContent()) {
+        const TileRenderContent* pRenderContent = content.getRenderContent();
+        if (pRenderContent) {
+            const CesiumGltf::Model& model = pRenderContent->getModel();
+            // 如果Model有ignoreLoad标记，返回true
+            if (model.ignoreLoad) {
+                return true;
+            }
+        }
+    }
+
+    //有的数据的_geometricError给错了。
+    //空数据_geometricError比parent 小。显示但是没内容
+    if (content.isEmptyContent())
+    {
+      return true;
+    }
+#pragma endregion
+
+    // 原有逻辑：检查geometricError是否为无穷大
+    bool bRefine = glm::isinf(this->_geometricError);
+    return bRefine;
+}
+
+bool Tile::checkPolygonIntersection(std::shared_ptr<const CesiumGeospatial::CartographicPolygon> polygon) const {
+    // 如果多边形为空，认为不相交
+    if (!polygon) {
+        mbIntersectsPolygon = false;
+        mCachedPolygon = polygon;
+        return false;
+    }
+    
+    // 如果缓存的多边形指针与当前多边形指针一致，直接返回缓存结果
+    if (mCachedPolygon == polygon) {
+        return mbIntersectsPolygon;
+    }
+    
+    // 需要重新计算相交状态
+    mbIntersectsPolygon = false;
+    mCachedPolygon = polygon;
+    
+    // 获取瓦块的包围盒
+    const BoundingVolume& boundingVolume = this->getBoundingVolume();
+    
+    // 使用BoundingVolume.h中的estimateGlobeRectangle函数将boundingVolume转换为GlobeRectangle
+    std::optional<CesiumGeospatial::GlobeRectangle> optionalRect = 
+        estimateGlobeRectangle(boundingVolume, CesiumGeospatial::Ellipsoid::WGS84);
+    
+    if (optionalRect.has_value()) {
+        const CesiumGeospatial::GlobeRectangle& rect = optionalRect.value();
+        const std::vector<glm::dvec2>& polygonVertices = polygon->getVertices();
+        
+        if (polygonVertices.size() >= 3) {
+            // 计算多边形的包围盒
+            double minLon = polygonVertices[0].x, maxLon = polygonVertices[0].x;
+            double minLat = polygonVertices[0].y, maxLat = polygonVertices[0].y;
+            
+            for (const auto& vertex : polygonVertices) {
+                minLon = std::min(minLon, vertex.x);
+                maxLon = std::max(maxLon, vertex.x);
+                minLat = std::min(minLat, vertex.y);
+                maxLat = std::max(maxLat, vertex.y);
+            }
+            
+            // 检查矩形相交
+            mbIntersectsPolygon = !(rect.getEast() < minLon || rect.getWest() > maxLon ||
+                                   rect.getNorth() < minLat || rect.getSouth() > maxLat);
+        }
+    }
+    
+    return mbIntersectsPolygon;
+}
+#pragma endregion
 
 } // namespace Cesium3DTilesSelection

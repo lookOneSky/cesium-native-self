@@ -463,6 +463,7 @@ void calcRasterOverlayDetailsInWorkerThread(
       getBoundingRegionFromBoundingVolume(contentBoundingVolume);
 
   // remove any projections that are already used to generated UV
+  //add das overlay uv生成
   int32_t firstRasterOverlayTexCoord = 0;
   if (result.rasterOverlayDetails) {
     const std::vector<CesiumGeospatial::Projection>& existingProjections =
@@ -685,6 +686,11 @@ postProcessContentInWorkerThread(
             std::move(projections),
             tileLoadInfo);
 
+#pragma region Das
+        // Store the tile bounding volume from tileLoadInfo into result
+        result.tileBoundingVolume = tileLoadInfo.tileBoundingVolume;
+#pragma endregion
+
         // create render resources
         if (tileLoadInfo.pPrepareRendererResources) {
           return tileLoadInfo.pPrepareRendererResources->prepareInLoadThread(
@@ -732,11 +738,13 @@ TilesetContentManager::TilesetContentManager(
   this->_rootTileAvailablePromise.resolve();
 }
 
+#pragma region Das
 TilesetContentManager::TilesetContentManager(
     const TilesetExternals& externals,
     const TilesetOptions& tilesetOptions,
     RasterOverlayCollection&& overlayCollection,
-    const std::string& url)
+    const std::string& url,
+    const DasTilesetExtra& dasExtra)
     : _externals{externals},
       _requestHeaders{tilesetOptions.requestHeaders},
       _pLoader{},
@@ -758,7 +766,9 @@ TilesetContentManager::TilesetContentManager(
           this->_destructionCompletePromise.getFuture().share()},
       _rootTileAvailablePromise{externals.asyncSystem.createPromise<void>()},
       _rootTileAvailableFuture{
-          this->_rootTileAvailablePromise.getFuture().share()} {
+          this->_rootTileAvailablePromise.getFuture().share()},
+      _dTerrainAddHeight{dasExtra.dTerrainAddHeight} {
+#pragma endregion
   if (!url.empty()) {
     this->notifyTileStartLoading(nullptr);
 
@@ -768,12 +778,17 @@ TilesetContentManager::TilesetContentManager(
     externals.pAssetAccessor
         ->get(externals.asyncSystem, url, this->_requestHeaders)
         .thenInWorkerThread(
+#pragma region Das
             [externals,
              ellipsoid,
              pLogger = externals.pLogger,
              asyncSystem = externals.asyncSystem,
              pAssetAccessor = externals.pAssetAccessor,
-             contentOptions = tilesetOptions.contentOptions](
+             contentOptions = tilesetOptions.contentOptions,
+             thiz,
+             dTerrainAddHeight = this->_dTerrainAddHeight
+             ](
+#pragma endregion
                 const std::shared_ptr<CesiumAsync::IAssetRequest>&
                     pCompletedRequest) {
               // Check if request is successful
@@ -818,6 +833,7 @@ TilesetContentManager::TilesetContentManager(
               // and create corresponding loader
               const auto rootIt = tilesetJson.FindMember("root");
               if (rootIt != tilesetJson.MemberEnd()) {
+#pragma region Das
                 return TilesetJsonLoader::createLoader(
                            asyncSystem,
                            pAssetAccessor,
@@ -825,10 +841,12 @@ TilesetContentManager::TilesetContentManager(
                            url,
                            pCompletedRequest->headers(),
                            tilesetJson,
-                           ellipsoid)
+                           ellipsoid,
+                           &thiz->_heightPolygons)
                     .thenImmediately(
                         [](TilesetContentLoaderResult<TilesetContentLoader>&&
                                result) { return std::move(result); });
+#pragma endregion
               } else {
                 const auto formatIt = tilesetJson.FindMember("format");
                 bool isLayerJsonFormat = formatIt != tilesetJson.MemberEnd() &&
@@ -836,6 +854,7 @@ TilesetContentManager::TilesetContentManager(
                 isLayerJsonFormat = isLayerJsonFormat &&
                                     std::string(formatIt->value.GetString()) ==
                                         "quantized-mesh-1.0";
+#pragma region Das
                 if (isLayerJsonFormat) {
                   const CesiumAsync::HttpHeaders& completedRequestHeaders =
                       pCompletedRequest->headers();
@@ -849,11 +868,13 @@ TilesetContentManager::TilesetContentManager(
                              url,
                              flatHeaders,
                              tilesetJson,
-                             ellipsoid)
+                             ellipsoid,
+                             dTerrainAddHeight)
                       .thenImmediately(
                           [](TilesetContentLoaderResult<TilesetContentLoader>&&
                                  result) { return std::move(result); });
                 }
+#pragma endregion
 
                 TilesetContentLoaderResult<TilesetContentLoader> result;
                 result.errors.emplaceError("tileset json has unsupport format");
@@ -1083,6 +1104,17 @@ void TilesetContentManager::loadTileContent(
   // Keep the manager alive while the load is in progress.
   CesiumUtility::IntrusivePointer<TilesetContentManager> thiz = this;
 
+  //获取tile的stringID
+  const std::string* pstrID = std::get_if<std::string>(&tile.getTileID());
+  if (pstrID)
+  {
+		std::string strID = *pstrID;
+		if (pstrID)
+		{
+			mloadingTiles.push_back(*pstrID);
+		}
+  }
+  
   pLoader->loadTileContent(loadInput)
       .thenImmediately([tileLoadInfo = std::move(tileLoadInfo),
                         projections = std::move(projections),
@@ -1699,4 +1731,28 @@ void TilesetContentManager::propagateTilesetContentLoaderResult(
     this->_pRootTile = std::move(result.pRootTile);
   }
 }
+
+#pragma region Das
+void TilesetContentManager::addHeightPolygon(const CesiumGeospatial::DasHeightCartographicPolygon& polygon)
+{
+    _heightPolygons.emplace_back(polygon);
+}
+
+void TilesetContentManager::clearHeightPolygons()
+{
+  _heightPolygons.clear();
+}
+
+std::vector<CesiumGeospatial::DasHeightCartographicPolygon> TilesetContentManager::getHeightPolygons()
+{
+  return _heightPolygons;
+}
+
+void TilesetContentManager::setTerrainAddHeight(double addHeight)
+{
+  _dTerrainAddHeight = addHeight;
+}
+
+#pragma endregion
+
 } // namespace Cesium3DTilesSelection
