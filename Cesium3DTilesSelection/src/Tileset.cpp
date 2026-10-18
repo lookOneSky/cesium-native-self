@@ -1839,6 +1839,14 @@ Tileset::TraversalDetails Tileset::_visitTile(
   // were rendered last frame.
   bool kickDueToNonReadyDescendant = !traversalDetails.allAreRenderable &&
                                      !traversalDetails.anyWereRenderedLastFrame;
+#pragma region jiangs
+  // 严格防洞：本瓦块已就绪而后代未全部就绪时，退回显示本瓦块，不再看后代上一帧是否显示过
+  if (this->_options.forbidHoles && this->_options.mbForbidHolesStrict &&
+      !traversalDetails.allAreRenderable &&
+      tile.getRefine() == TileRefine::Replace && tile.isRenderable()) {
+    kickDueToNonReadyDescendant = true;
+  }
+#pragma endregion jiangs
 
   // Descendants may also be kicked if this tile was rendered last frame and
   // has not finished fading in yet.

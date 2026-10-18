@@ -297,7 +297,11 @@ if (CESIUM_TESTS_ENABLED)
 endif()
 
 
-add_subdirectory(doc)
+#pragma region jiangs
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/doc/CMakeLists.txt")
+    add_subdirectory(doc)
+endif()
+#pragma endregion jiangs
 
 
 
