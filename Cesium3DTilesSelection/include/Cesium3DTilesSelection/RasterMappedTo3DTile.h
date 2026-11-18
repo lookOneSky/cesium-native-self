@@ -173,6 +173,14 @@ public:
    */
   bool isMoreDetailAvailable() const noexcept;
 
+#pragma region Das
+  /** @brief Whether the requested image failed and an ancestor may be used. */
+  bool hasOriginalTileFailed() const noexcept
+  {
+    return this->_originalFailed;
+  }
+#pragma endregion
+
   /**
    * @brief Detach the raster from the given tile.
    * @param prepareRendererResources The IPrepareRendererResources used to
