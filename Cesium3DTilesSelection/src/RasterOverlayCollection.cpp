@@ -99,7 +99,9 @@ RasterOverlayCollection::RasterOverlayCollection(
       _ellipsoid(ellipsoid),
       _pOverlays(nullptr)
 {
-  int a = 0;
+#pragma region das
+  [[maybe_unused]] int a = 0;
+#pragma endregion
   a++;
 }
 
@@ -226,7 +228,7 @@ void RasterOverlayCollection::remove(
 			//3Dtiles raterOverlay PlaceHolder释放
 			if (mapped.getLoadingTile() && mapped.getLoadingTile()->getState() == RasterOverlayTile::LoadState::Placeholder && pOverlay == &mapped.getLoadingTile()->getTileProvider().getOwner())
 			{
-				int a = 0;
+				[[maybe_unused]] int a = 0;
 				a++;
 				return true;
 			}
@@ -240,7 +242,9 @@ void RasterOverlayCollection::remove(
 
     if (!bRemove)
     {
-      int a = 0;
+#pragma region das
+      [[maybe_unused]] int a = 0;
+#pragma endregion
       a++;
     }
 
@@ -293,7 +297,7 @@ void RasterOverlayCollection::remove(
           }
 #pragma region Das
           else {
-            int a = 0;
+            [[maybe_unused]] int a = 0;
             a++;
           }
 #pragma endregion

@@ -235,6 +235,11 @@ endif()
 list(APPEND CMAKE_PREFIX_PATH "${PACKAGE_BUILD_DIR}/share/s2")
 list(APPEND CMAKE_PREFIX_PATH "${PACKAGE_BUILD_DIR}/share")
 list(APPEND CMAKE_PREFIX_PATH "${PACKAGE_BUILD_DIR}")
+# region das
+if (EMSCRIPTEN)
+    list(APPEND CMAKE_FIND_ROOT_PATH "${PACKAGE_BUILD_DIR}")
+endif()
+# endregion
 
 # Find the VCPKG dependnecies
 # Note that while we could push these into the extern/CMakeLists.txt as an organization tidy-up, that would require
@@ -261,6 +266,30 @@ find_package(tinyxml2 CONFIG REQUIRED)
 find_package(unofficial-sqlite3 CONFIG REQUIRED)
 find_package(WebP CONFIG REQUIRED)
 find_package(ada CONFIG REQUIRED)
+# region das
+if (EMSCRIPTEN)
+    set(CESIUM_WASM_COMPAT_INCLUDE_DIR "${CMAKE_BINARY_DIR}/compat/include")
+    file(GLOB_RECURSE CESIUM_FMT_HEADERS RELATIVE "${PACKAGE_BUILD_DIR}/include" "${PACKAGE_BUILD_DIR}/include/fmt/*.h")
+    foreach(CESIUM_FMT_HEADER IN LISTS CESIUM_FMT_HEADERS)
+        if (CESIUM_FMT_HEADER STREQUAL "fmt/base.h")
+            file(READ "${PACKAGE_BUILD_DIR}/include/${CESIUM_FMT_HEADER}" CESIUM_FMT_BASE)
+            string(REPLACE "detail::parse_format_string<true>(str_, checker(s));" "detail::parse_format_string<true>(str_, checker(str_));" CESIUM_FMT_BASE "${CESIUM_FMT_BASE}")
+            set(CESIUM_FMT_PREVIOUS "")
+            if (EXISTS "${CESIUM_WASM_COMPAT_INCLUDE_DIR}/${CESIUM_FMT_HEADER}")
+                file(READ "${CESIUM_WASM_COMPAT_INCLUDE_DIR}/${CESIUM_FMT_HEADER}" CESIUM_FMT_PREVIOUS)
+            endif()
+            if (NOT CESIUM_FMT_BASE STREQUAL CESIUM_FMT_PREVIOUS)
+                file(MAKE_DIRECTORY "${CESIUM_WASM_COMPAT_INCLUDE_DIR}/fmt")
+                file(WRITE "${CESIUM_WASM_COMPAT_INCLUDE_DIR}/${CESIUM_FMT_HEADER}" "${CESIUM_FMT_BASE}")
+            endif()
+        else()
+            configure_file("${PACKAGE_BUILD_DIR}/include/${CESIUM_FMT_HEADER}" "${CESIUM_WASM_COMPAT_INCLUDE_DIR}/${CESIUM_FMT_HEADER}" COPYONLY)
+        endif()
+    endforeach()
+    include_directories(BEFORE "${CESIUM_WASM_COMPAT_INCLUDE_DIR}")
+    install(DIRECTORY "${CESIUM_WASM_COMPAT_INCLUDE_DIR}/fmt" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+endif()
+# endregion
 
 
 # Private Library (s2geometry)

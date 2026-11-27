@@ -1224,7 +1224,9 @@ TilesetJsonLoader::loadTileContent(const TileLoadInput& loadInput) {
               gltfOptions.applyTextureTransform =
                   contentOptions.applyTextureTransform;
               if (url->find("Tile_+449_+407.b3dm") < url->length()) {
-                int a = 0;
+#pragma region das
+                [[maybe_unused]] int a = 0;
+#pragma endregion
                 a++;
               } else {
               }
@@ -1317,7 +1319,7 @@ void TilesetJsonLoader::setHeightPolygons(
     const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>& heightPolygons) {
   if (this->_heightPolygons.size())
   {
-    int a = 0;
+    [[maybe_unused]] int a = 0;
     a++;
   }
 

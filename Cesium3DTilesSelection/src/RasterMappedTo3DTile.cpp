@@ -81,7 +81,9 @@ RasterMappedTo3DTile::RasterMappedTo3DTile(
 RasterMappedTo3DTile::~RasterMappedTo3DTile()
 {
   mbDestroyed = true;
-  int a = 0;
+#pragma region das
+  [[maybe_unused]] int a = 0;
+#pragma endregion
   a++;
 }
 

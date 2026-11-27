@@ -98,7 +98,9 @@ RasterOverlayTileProvider::~RasterOverlayTileProvider() noexcept {
     #pragma endregion jiangs
     if (this->_pPlaceholder->getReferenceCount() > 1)
     {
-      int a = 0;
+#pragma region das
+      [[maybe_unused]] int a = 0;
+#pragma endregion
       a++;
     }
 
