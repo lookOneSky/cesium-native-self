@@ -483,3 +483,7 @@ if(CESIUM_INSTALL_STATIC_LIBS AND CESIUM_INSTALL_HEADERS)
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cesium-nativeConfig.cmake
     DESTINATION ${CMAKE_INSTALL_DATADIR}/cesium-native/cmake)
 endif()
+
+# region das
+add_subdirectory(DasCesium)
+# endregion

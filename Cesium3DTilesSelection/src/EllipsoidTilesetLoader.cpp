@@ -50,7 +50,9 @@ EllipsoidTilesetLoader::EllipsoidTilesetLoader(const Ellipsoid& ellipsoid)
     : _projection(ellipsoid),
       _tilingScheme(
           _projection.project(_projection.MAXIMUM_GLOBE_RECTANGLE),
-          2,
+#pragma region das
+          1,//默认生成web mercator适配的瓦块
+#pragma endregion
           1) {}
 
 /*static*/ std::unique_ptr<Tileset> EllipsoidTilesetLoader::createTileset(
@@ -91,8 +93,23 @@ EllipsoidTilesetLoader::EllipsoidTilesetLoader(const Ellipsoid& ellipsoid)
 
 Future<TileLoadResult>
 EllipsoidTilesetLoader::loadTileContent(const TileLoadInput& input) {
+#pragma region das
+  CesiumGltf::Model model = createModel(createGeometry(input.tile));
+  // 添加 Tile ID 信息到 extras
+  const CesiumGeometry::QuadtreeTileID* pQuadtreeID =
+      std::get_if<CesiumGeometry::QuadtreeTileID>(&input.tile.getTileID());
+  if (pQuadtreeID) {
+    std::string tileUrl = "L" + std::to_string(pQuadtreeID->level) + "X" +
+                          std::to_string(pQuadtreeID->x) + "Y" +
+                          std::to_string(pQuadtreeID->y);
+    model.extras["Cesium3DTiles_TileUrl"] = CesiumUtility::JsonValue(tileUrl);
+  }
+
+#pragma endregion
   return input.asyncSystem.createResolvedFuture(TileLoadResult{
-      createModel(createGeometry(input.tile)),
+#pragma region das
+      std::move(model),
+#pragma endregion
       Axis::Z,
       std::nullopt,
       std::nullopt,

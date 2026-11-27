@@ -16,6 +16,11 @@
 #include <CesiumAsync/IAssetAccessor.h>
 #include <CesiumUtility/CreditSystem.h>
 #include <CesiumUtility/ReferenceCounted.h>
+#pragma region das
+
+#include <CesiumGeospatial/Das/DasCartographicPolygon.h>
+#include <Cesium3DTilesSelection/DasTilesetExtra.h>
+#pragma endregion
 
 #include <vector>
 
@@ -43,6 +48,9 @@ enum class UnloadTileContentResult : uint8_t {
 
 class TilesetSharedAssetSystem;
 class TileLoadRequester;
+#pragma region das
+class Tileset;
+#pragma endregion
 
 class TilesetContentManager
     : public CesiumUtility::ReferenceCountedNonThreadSafe<
@@ -55,10 +63,9 @@ public:
       std::unique_ptr<TilesetContentLoader>&& pLoader,
       std::unique_ptr<Tile>&& pRootTile);
 
-  static CesiumUtility::IntrusivePointer<TilesetContentManager> createFromUrl(
-      const TilesetExternals& externals,
-      const TilesetOptions& tilesetOptions,
-      const std::string& url);
+#pragma region das
+  static CesiumUtility::IntrusivePointer<TilesetContentManager> createFromUrl( const TilesetExternals& externals, const TilesetOptions& tilesetOptions, const std::string& url, const DasTilesetExtra& dasExtra = DasTilesetExtra());
+#pragma endregion
 
   static CesiumUtility::IntrusivePointer<TilesetContentManager>
   createFromLoaderFactory(
@@ -88,7 +95,9 @@ public:
    */
   CesiumAsync::SharedFuture<void>& getRootTileAvailableEvent();
 
-  ~TilesetContentManager() noexcept;
+#pragma region das
+  virtual ~TilesetContentManager() noexcept;
+#pragma endregion
 
   void loadTileContent(Tile& tile, const TilesetOptions& tilesetOptions);
 
@@ -172,14 +181,18 @@ public:
    * unloading tiles. If 0.0, there is no limit.
    */
   void
-  unloadCachedBytes(int64_t maximumCachedBytes, double timeBudgetMilliseconds);
+#pragma region das
+  unloadCachedBytes(int64_t maximumCachedBytes, double timeBudgetMilliseconds, Tileset* pDasTileset = nullptr);
+#pragma endregion
   void clearChildrenRecursively(Tile* pTile) noexcept;
 
   void registerTileRequester(TileLoadRequester& requester);
   void unregisterTileRequester(TileLoadRequester& requester);
 
-  void processWorkerThreadLoadRequests(const TilesetOptions& options);
-  void processMainThreadLoadRequests(const TilesetOptions& options);
+#pragma region das
+  void processWorkerThreadLoadRequests(const TilesetOptions& options, Tileset* pDasTileset = nullptr);
+  void processMainThreadLoadRequests(const TilesetOptions& options, Tileset* pDasTileset = nullptr);
+#pragma endregion
 
   void markTilesetDestroyed() noexcept;
   void releaseReference() const;
@@ -188,6 +201,28 @@ public:
   const TilesetExternals& getExternals() const;
 
   const CesiumUtility::CreditSource& getCreditSource() const noexcept;
+#pragma region das
+
+public:
+  void addHeightPolygon(const CesiumGeospatial::DasHeightCartographicPolygon& polygon);
+
+  /**
+   * @brief 清除所有高度编辑多边形
+   */
+  void clearHeightPolygons();
+
+  /**
+   * @brief 获取高度编辑多边形数组
+   * @return 高度编辑多边形数组的引用
+   */
+  std::vector<CesiumGeospatial::DasHeightCartographicPolygon> getHeightPolygons();
+
+  void setTerrainAddHeight(double addHeight);
+  double getTerrainAddHeight() const { return this->_dTerrainAddHeight; }
+
+  std::vector<std::string> mloadingTiles; // 已启动加载的瓦块标识。
+
+#pragma endregion
 
 private:
   TilesetContentManager(
@@ -262,5 +297,9 @@ private:
   std::vector<TileLoadRequester*> _requestersWithRequests;
 
   CesiumUtility::CreditSource _creditSource;
+#pragma region das
+  std::vector<CesiumGeospatial::DasHeightCartographicPolygon> _heightPolygons; // 高度编辑区域。
+  double _dTerrainAddHeight = 0.0; // 地形高度偏移（米）。
+#pragma endregion
 };
 } // namespace Cesium3DTilesSelection

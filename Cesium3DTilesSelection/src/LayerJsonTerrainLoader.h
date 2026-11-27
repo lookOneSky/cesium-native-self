@@ -37,24 +37,14 @@ public:
       const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID);
 
   static CesiumAsync::Future<TilesetContentLoaderResult<LayerJsonTerrainLoader>>
-  createLoader(
-      const CesiumAsync::AsyncSystem& asyncSystem,
-      const std::shared_ptr<CesiumAsync::IAssetAccessor>& pAssetAccessor,
-      const TilesetContentOptions& contentOptions,
-      const std::string& layerJsonUrl,
-      const std::vector<CesiumAsync::IAssetAccessor::THeader>& requestHeaders,
-      const rapidjson::Document& layerJson,
-      const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID);
+#pragma region das
+  createLoader( const CesiumAsync::AsyncSystem& asyncSystem, const std::shared_ptr<CesiumAsync::IAssetAccessor>& pAssetAccessor, const TilesetContentOptions& contentOptions, const std::string& layerJsonUrl, const std::vector<CesiumAsync::IAssetAccessor::THeader>& requestHeaders, const rapidjson::Document& layerJson, const CesiumGeospatial::Ellipsoid& ellipsoid CESIUM_DEFAULT_ELLIPSOID, double dTerrainAddHeight = 0.0);
+#pragma endregion
 
   struct Layer {
-    Layer(
-        const std::string& baseUrl,
-        std::string&& version,
-        std::vector<std::string>&& tileTemplateUrls,
-        std::string&& extensionsToRequest,
-        CesiumGeometry::QuadtreeRectangleAvailability&& contentAvailability,
-        uint32_t maxZooms,
-        int32_t availabilityLevels);
+#pragma region das
+    Layer( const std::string& baseUrl, std::string&& version, std::vector<std::string>&& tileTemplateUrls, std::string&& extensionsToRequest,//add CesiumGeometry::QuadtreeRectangleAvailability&& contentAvailability, uint32_t maxZooms, int32_t availabilityLevels);
+#pragma endregion
 
     std::string baseUrl;
     std::string version;
@@ -84,7 +74,10 @@ public:
 
   const std::vector<Layer>& getLayers() const noexcept;
 
-private:
+#pragma region das
+protected:
+
+#pragma endregion
   bool tileHasUpsampledChild(const Tile& tile) const;
 
   std::vector<Tile> createTileChildrenImpl(const Tile& tile);
@@ -109,6 +102,24 @@ private:
   CesiumGeometry::QuadtreeTilingScheme _tilingScheme;
   CesiumGeospatial::Projection _projection;
   std::vector<Layer> _layers;
+#pragma region das
+
+public:
+  /**
+   * @brief 设置地形高度偏移值
+   * @param addHeight 高度偏移值，单位为米
+   */
+  void setTerrainAddHeight(double addHeight) { _dTerrainAddHeight = addHeight; }
+
+  /**
+   * @brief 获取地形高度偏移值
+   * @return 高度偏移值，单位为米
+   */
+  double getTerrainAddHeight() const { return _dTerrainAddHeight; }
+
+private:
+  double _dTerrainAddHeight = 0.0;// 地形高度偏移值（米）
+#pragma endregion
 };
 
 } // namespace Cesium3DTilesSelection

@@ -154,7 +154,10 @@ void TilesetHeightQuery::intersectVisibleTile(
 
 void TilesetHeightQuery::findCandidateTiles(
     Tile* pTile,
-    std::vector<std::string>& warnings) {
+#pragma region das
+    std::vector<std::string>& warnings,
+    bool smallestDetailedOnly) {
+#pragma endregion
   // If tile failed to load, this means we can't complete the intersection
   if (pTile->getState() == TileLoadState::Failed) {
     warnings.emplace_back("Tile load failed during query. Ignoring.");
@@ -198,6 +201,14 @@ void TilesetHeightQuery::findCandidateTiles(
       }
     }
 
+#pragma region das
+    if (smallestDetailedOnly && pTile->getContent().getRenderContent())
+    {
+      this->candidateTiles.emplace_back(pTile);
+      return;
+    }
+
+#pragma endregion
     // Traverse children
     for (Tile& child : pTile->getChildren()) {
       // if bounding volume doesn't intersect this ray, we can skip it
@@ -209,7 +220,9 @@ void TilesetHeightQuery::findCandidateTiles(
         continue;
 
       // Child is a candidate, traverse it and its children
-      findCandidateTiles(&child, warnings);
+#pragma region das
+      findCandidateTiles(&child, warnings, smallestDetailedOnly);
+#pragma endregion
     }
   }
 }
@@ -228,7 +241,10 @@ TilesetHeightRequest::~TilesetHeightRequest() noexcept = default;
     const AsyncSystem& asyncSystem,
     TilesetContentManager& contentManager,
     const TilesetOptions& options,
-    std::list<TilesetHeightRequest>& heightRequests) {
+#pragma region das
+    std::list<TilesetHeightRequest>& heightRequests,
+    bool smallestDetailedOnly) {
+#pragma endregion
   if (heightRequests.empty())
     return;
 
@@ -237,7 +253,9 @@ TilesetHeightRequest::~TilesetHeightRequest() noexcept = default;
   for (auto it = heightRequests.begin(); it != heightRequests.end();) {
     TilesetHeightRequest& request = *it;
     if (!request
-             .tryCompleteHeightRequest(asyncSystem, contentManager, options)) {
+#pragma region das
+             .tryCompleteHeightRequest(asyncSystem, contentManager, options, smallestDetailedOnly)) {
+#pragma endregion
       ++it;
     } else {
       auto deleteIt = it;
@@ -296,7 +314,10 @@ void Cesium3DTilesSelection::TilesetHeightRequest::failHeightRequests(
 bool TilesetHeightRequest::tryCompleteHeightRequest(
     const AsyncSystem& asyncSystem,
     TilesetContentManager& contentManager,
-    const TilesetOptions& options) {
+#pragma region das
+    const TilesetOptions& options,
+    bool smallestDetailedOnly) {
+#pragma endregion
   this->tilesToLoad.clear();
 
   // If this TilesetContentLoader supports direct height queries, use that
@@ -329,7 +350,9 @@ bool TilesetHeightRequest::tryCompleteHeightRequest(
     if (query.candidateTiles.empty() && query.additiveCandidateTiles.empty()) {
       // Find the initial set of tiles whose bounding volume is intersected by
       // the query ray.
-      query.findCandidateTiles(contentManager.getRootTile(), warnings);
+#pragma region das
+      query.findCandidateTiles(contentManager.getRootTile(), warnings, smallestDetailedOnly);
+#pragma endregion
     } else {
       // Refine the current set of candidate tiles, in case further tiles from
       // implicit tiling, external tilesets, etc. having been loaded since last
@@ -342,7 +365,9 @@ bool TilesetHeightRequest::tryCompleteHeightRequest(
         TileLoadState loadState = pCandidate->getState();
         if (!pCandidate->getChildren().empty() &&
             loadState >= TileLoadState::ContentLoaded) {
-          query.findCandidateTiles(pCandidate.get(), warnings);
+#pragma region das
+          query.findCandidateTiles(pCandidate.get(), warnings, smallestDetailedOnly);
+#pragma endregion
         } else {
           // Check again next frame to see if this tile has children.
           query.candidateTiles.emplace_back(pCandidate);

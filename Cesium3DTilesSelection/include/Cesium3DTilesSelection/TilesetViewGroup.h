@@ -245,6 +245,9 @@ public:
   bool isCreditReferenced(CesiumUtility::Credit credit) const noexcept;
 
 private:
+#pragma region das
+  friend class Tileset;
+#pragma endregion
   double _weight = 1.0;
   std::vector<TileLoadTask> _mainThreadLoadQueue;
   std::vector<TileLoadTask> _workerThreadLoadQueue;

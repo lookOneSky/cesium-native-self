@@ -17,7 +17,8 @@ set_target_properties(Cesium3DTilesSelection
 
 set_target_properties(Cesium3DTilesSelection
     PROPERTIES
-    PUBLIC_HEADER "${CESIUM_3DTILES_SELECTION_PUBLIC_HEADERS}"
+    #add Das 将src目录的头文件添加到PUBLIC_HEADER，使其在安装时被导出
+    PUBLIC_HEADER "${CESIUM_3DTILES_SELECTION_PUBLIC_HEADERS};${CESIUM_3DTILES_SELECTION_HEADERS}"
 )
 
 target_sources(
@@ -35,6 +36,7 @@ cesium_target_include_directories(
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
         $<INSTALL_INTERFACE:include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/src>
     PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/src
 )

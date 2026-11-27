@@ -102,6 +102,10 @@ struct CESIUM3DTILESSELECTION_API TilesetOptions {
    * newly-visible parts of the tileset may initially be blank.
    */
   bool forbidHoles = false;
+#pragma region das
+
+  bool mbForbidHolesStrict = false; // 严格防洞：已就绪的Replace瓦块，后代没全部就绪就显示自己；需同时开启forbidHoles
+#pragma endregion
 
   /**
    * @brief Enable culling of tiles against the frustum.

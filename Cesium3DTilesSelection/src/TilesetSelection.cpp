@@ -246,29 +246,119 @@ bool isVisibleInFog(double distance, double fogDensity) noexcept {
   return glm::exp(-(fogScalar * fogScalar)) > 0.0;
 }
 
+#pragma region das
+BoundingVolume createExtendedBottomBoundingVolume(
+    const BoundingVolume& originalBoundingVolume,
+    double bottomExtension,
+    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+  if (bottomExtension <= 0.0) {
+    return originalBoundingVolume;
+  }
+
+  // 对于BoundingRegion类型，我们可以直接扩展其最小高度
+  if (const CesiumGeospatial::BoundingRegion* pRegion =
+      std::get_if<CesiumGeospatial::BoundingRegion>(&originalBoundingVolume)) {
+    return CesiumGeospatial::BoundingRegion(
+        pRegion->getRectangle(),
+        pRegion->getMinimumHeight() - bottomExtension, // 向下扩展底部
+        pRegion->getMaximumHeight(),
+        ellipsoid
+    );
+  }
+
+  // 对于BoundingRegionWithLooseFittingHeights类型
+  if (const CesiumGeospatial::BoundingRegionWithLooseFittingHeights* pLooseRegion =
+      std::get_if<CesiumGeospatial::BoundingRegionWithLooseFittingHeights>(&originalBoundingVolume)) {
+    return CesiumGeospatial::BoundingRegionWithLooseFittingHeights(
+        CesiumGeospatial::BoundingRegion(
+            pLooseRegion->getBoundingRegion().getRectangle(),
+            pLooseRegion->getBoundingRegion().getMinimumHeight() - bottomExtension, // 向下扩展底部
+            pLooseRegion->getBoundingRegion().getMaximumHeight(),
+            ellipsoid
+        )
+    );
+  }
+
+  // 对于S2CellBoundingVolume类型，扩展其最小高度
+  if (const CesiumGeospatial::S2CellBoundingVolume* pS2Cell =
+      std::get_if<CesiumGeospatial::S2CellBoundingVolume>(&originalBoundingVolume)) {
+    return CesiumGeospatial::S2CellBoundingVolume(
+        pS2Cell->getCellID(),
+        pS2Cell->getMinimumHeight() - bottomExtension, // 向下扩展底部
+        pS2Cell->getMaximumHeight(),
+        ellipsoid
+    );
+  }
+
+  // 对于BoundingSphere类型，通过移动中心和增加半径来扩展
+  if (const CesiumGeometry::BoundingSphere* pSphere =
+      std::get_if<CesiumGeometry::BoundingSphere>(&originalBoundingVolume)) {
+    // 获取原始球心和半径
+    const glm::dvec3& originalCenter = pSphere->getCenter();
+    double originalRadius = pSphere->getRadius();
+
+    // 计算新的球心位置（向下移动一半的扩展距离）
+    glm::dvec3 newCenter = originalCenter - glm::dvec3(0.0, 0.0, bottomExtension * 0.5);
+
+    // 计算新的半径（需要包含原始球体和扩展部分）
+    double newRadius = originalRadius + bottomExtension * 0.5;
+
+    return CesiumGeometry::BoundingSphere(newCenter, newRadius);
+  }
+
+  // 对于OrientedBoundingBox类型，扩展Z轴负方向
+  if (const CesiumGeometry::OrientedBoundingBox* pBox =
+      std::get_if<CesiumGeometry::OrientedBoundingBox>(&originalBoundingVolume)) {
+    // 获取原始盒子的中心和半轴
+    const glm::dvec3& originalCenter = pBox->getCenter();
+    const glm::dmat3& originalHalfAxes = pBox->getHalfAxes();
+
+    // 确定Z轴方向（通常是第三个半轴向量的方向）
+    glm::dvec3 zAxis = glm::normalize(originalHalfAxes[2]);
+
+    // 计算新的中心位置（沿Z轴负方向移动一半的扩展距离）
+    glm::dvec3 newCenter = originalCenter - zAxis * (bottomExtension * 0.5);
+
+    // 创建新的半轴矩阵（扩展Z轴的长度）
+    glm::dmat3 newHalfAxes = originalHalfAxes;
+    newHalfAxes[2] = originalHalfAxes[2] + zAxis * (bottomExtension * 0.5);
+
+    return CesiumGeometry::OrientedBoundingBox(newCenter, newHalfAxes);
+  }
+
+  // 对于BoundingCylinderRegion类型，我们转换为OrientedBoundingBox来处理
+  if (const CesiumGeometry::BoundingCylinderRegion* pCylinder =
+      std::get_if<CesiumGeometry::BoundingCylinderRegion>(&originalBoundingVolume)) {
+    // 将圆柱体转换为定向包围盒
+    CesiumGeometry::OrientedBoundingBox cylinderBox = pCylinder->toOrientedBoundingBox();
+
+    // 对转换后的包围盒应用扩展
+    BoundingVolume extendedBoxVolume = createExtendedBottomBoundingVolume(
+        cylinderBox,
+        bottomExtension,
+        ellipsoid
+    );
+
+    // 返回扩展后的包围盒（作为OrientedBoundingBox）
+    return extendedBoxVolume;
+  }
+
+  // 对于其他未处理的类型，返回原始包围盒
+  return originalBoundingVolume;
+}
+
+#pragma endregion
 double computeTilePriority(
     const Tile& tile,
     const std::vector<ViewState>& frustums,
     const std::vector<double>& distances) {
   double highestLoadPriority = std::numeric_limits<double>::max();
-  const glm::dvec3 boundingVolumeCenter =
-      getBoundingVolumeCenter(tile.getBoundingVolume());
-
-  for (size_t i = 0; i < frustums.size() && i < distances.size(); ++i) {
-    const ViewState& frustum = frustums[i];
-    const double distance = distances[i];
-
-    glm::dvec3 tileDirection = boundingVolumeCenter - frustum.getPosition();
-    const double magnitude = glm::length(tileDirection);
-
-    if (magnitude >= CesiumUtility::Math::Epsilon5) {
-      tileDirection /= magnitude;
-      const double loadPriority =
-          (1.0 - glm::dot(tileDirection, frustum.getDirection())) * distance;
-      if (loadPriority < highestLoadPriority) {
-        highestLoadPriority = loadPriority;
-      }
-    }
+#pragma region das
+  (void)tile;
+  for (size_t i = 0; i < frustums.size() && i < distances.size(); ++i)
+  {
+    highestLoadPriority = glm::min(highestLoadPriority, distances[i]);
+#pragma endregion
   }
   return highestLoadPriority;
 }
@@ -392,12 +482,17 @@ void frustumCull(
             frustums.end(),
             [&ellipsoid,
              children = tile.getChildren(),
-             renderTilesUnderCamera = context.options.renderTilesUnderCamera](
+#pragma region das
+             renderTilesUnderCamera = context.options.renderTilesUnderCamera,
+             bottomExtension = context.boundingVolumeBottomExtension](
+#pragma endregion
                 const ViewState& frustum) {
               for (const Tile& child : children) {
                 if (isVisibleFromCamera(
                         frustum,
-                        child.getBoundingVolume(),
+#pragma region das
+                        createExtendedBottomBoundingVolume(child.getBoundingVolume(), bottomExtension, ellipsoid),
+#pragma endregion
                         ellipsoid,
                         renderTilesUnderCamera)) {
                   return true;
@@ -415,11 +510,16 @@ void frustumCull(
                  [&ellipsoid,
                   &boundingVolume = tile.getBoundingVolume(),
                   renderTilesUnderCamera =
-                      context.options.renderTilesUnderCamera](
+#pragma region das
+                      context.options.renderTilesUnderCamera,
+                  bottomExtension = context.boundingVolumeBottomExtension](
+#pragma endregion
                      const ViewState& frustum) {
                    return isVisibleFromCamera(
                        frustum,
-                       boundingVolume,
+#pragma region das
+                       createExtendedBottomBoundingVolume(boundingVolume, bottomExtension, ellipsoid),
+#pragma endregion
                        ellipsoid,
                        renderTilesUnderCamera);
                  })) {
@@ -963,6 +1063,15 @@ TraversalDetails visitTile(
   bool kickDueToNonReadyDescendant = !traversalDetails.allAreRenderable &&
                                      !traversalDetails.anyWereRenderedLastFrame;
 
+#pragma region das
+  if (context.options.forbidHoles && context.options.mbForbidHolesStrict &&
+      !traversalDetails.allAreRenderable &&
+      tile.getRefine() == TileRefine::Replace && tile.isRenderable())
+  {
+    kickDueToNonReadyDescendant = true;
+  }
+
+#pragma endregion
   // Descendants may also be kicked if this tile was rendered last frame and
   // has not finished fading in yet.
   const TileRenderContent* pRenderContent =

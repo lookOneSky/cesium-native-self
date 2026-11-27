@@ -303,5 +303,10 @@ private:
   CesiumGeometry::Rectangle _coverageRectangle;
   std::optional<DestructionCompleteDetails> _destructionCompleteDetails;
   std::shared_ptr<CesiumUtility::CreditSource> _pCreditSource;
+#pragma region das
+
+public:
+  bool mbNeedWaitForLoad = true; // 等待保护区域光栅加载完成。
+#pragma endregion
 };
 } // namespace CesiumRasterOverlays

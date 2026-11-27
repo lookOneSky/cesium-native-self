@@ -28,6 +28,9 @@ struct TileSelectionContext {
    * heap during selection. Holds the occlusion proxies of the children of a
    * tile. */
   std::vector<const TileOcclusionRendererProxy*>& scratchOcclusionProxies;
+#pragma region das
+  double boundingVolumeBottomExtension = 0.0; // 裁剪时向下扩展的高度。
+#pragma endregion
 };
 
 /**

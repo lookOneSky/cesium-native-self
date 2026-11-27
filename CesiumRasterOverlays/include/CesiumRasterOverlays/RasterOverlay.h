@@ -242,6 +242,11 @@ private:
   RasterOverlayOptions _options;
   std::vector<CesiumUtility::Credit> _credits;
   std::optional<DestructionCompleteDetails> _destructionCompleteDetails;
+#pragma region das
+
+public:
+  bool mbNeedWaitForLoad = true; //PolygonOverlay无缝替换
+#pragma endregion
 };
 
 } // namespace CesiumRasterOverlays

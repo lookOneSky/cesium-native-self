@@ -246,10 +246,14 @@ bool copyDecodedAttribute(
   }
 
   if (pAccessor->count != pMesh->num_points()) {
-    readGltf.warnings.emplace_back("Attribute accessor.count doesn't match "
-                                   "with number of decoded Draco vertices.");
-
-    pAccessor->count = pMesh->num_points();
+#pragma region das
+    // warnings place
+    /* readGltf.warnings.emplace_back("Attribute accessor.count doesn't match "
+                                    "with number of decoded Draco vertices.");*/
+    // pAccessor->count = pMesh->num_points();
+    pAccessor->count =
+        std::min(pAccessor->count, static_cast<int64_t>(pMesh->num_points()));
+#pragma endregion
   }
 
   pAccessor->bufferView = static_cast<int32_t>(model.bufferViews.size());

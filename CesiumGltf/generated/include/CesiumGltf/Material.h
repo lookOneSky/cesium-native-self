@@ -29,6 +29,9 @@ struct CESIUMGLTF_API Material final : public CesiumGltf::NamedObject {
   struct AlphaMode {
     /** @brief The alpha value is ignored, and the rendered output is fully
      * opaque. */
+#pragma region das
+#undef OPAQUE
+#pragma endregion
     inline static const std::string OPAQUE = "OPAQUE";
 
     /** @brief The rendered output is either fully opaque or fully transparent

@@ -142,6 +142,10 @@ struct CESIUM3DTILESSELECTION_API TileLoadResult {
   CesiumGeospatial::Ellipsoid ellipsoid =
       CesiumGeospatial::Ellipsoid::UNIT_SPHERE;
 
+#pragma region das
+
+
+#pragma endregion
   /**
    * @brief The bounding volume initially loaded with the tile.
    *
@@ -161,6 +165,15 @@ struct CESIUM3DTILESSELECTION_API TileLoadResult {
    * bounding volume.
    */
   std::optional<BoundingVolume> initialContentBoundingVolume = std::nullopt;
+#pragma region das
+
+  /**
+   * @brief The bounding volume from tile load info.
+   *
+   * This stores the bounding volume information passed from TileContentLoadInfo.
+   */
+  std::optional<BoundingVolume> tileBoundingVolume = std::nullopt;
+#pragma endregion
 
   /**
    * @brief Create a result with Failed state

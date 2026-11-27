@@ -102,7 +102,9 @@ public:
    * @param outWarnings On return, reports any warnings that occurred during
    * candidate search.
    */
-  void findCandidateTiles(Tile* pTile, std::vector<std::string>& outWarnings);
+#pragma region das
+  void findCandidateTiles(Tile* pTile, std::vector<std::string>& outWarnings, bool smallestDetailedOnly = false);
+#pragma endregion
 };
 
 /**
@@ -143,11 +145,9 @@ struct TilesetHeightRequest : public TileLoadRequester {
    * @param heightRequests The list of all height requests. Completed requests
    * will be removed from this list.
    */
-  static void processHeightRequests(
-      const CesiumAsync::AsyncSystem& asyncSystem,
-      TilesetContentManager& contentManager,
-      const TilesetOptions& options,
-      std::list<TilesetHeightRequest>& heightRequests);
+#pragma region das
+  static void processHeightRequests( const CesiumAsync::AsyncSystem& asyncSystem, TilesetContentManager& contentManager, const TilesetOptions& options, std::list<TilesetHeightRequest>& heightRequests, bool smallestDetailedOnly = false);
+#pragma endregion
 
   double getWeight() const override;
 
@@ -182,10 +182,9 @@ struct TilesetHeightRequest : public TileLoadRequester {
    * @param contentManager The content manager.
    * @param options Options associated with the tileset.
    */
-  bool tryCompleteHeightRequest(
-      const CesiumAsync::AsyncSystem& asyncSystem,
-      TilesetContentManager& contentManager,
-      const TilesetOptions& options);
+#pragma region das
+  bool tryCompleteHeightRequest( const CesiumAsync::AsyncSystem& asyncSystem, TilesetContentManager& contentManager, const TilesetOptions& options, bool smallestDetailedOnly = false);
+#pragma endregion
 };
 
 } // namespace Cesium3DTilesSelection

@@ -53,6 +53,9 @@ RasterOverlayTileProvider::RasterOverlayTileProvider(
           parameters.pCreditSource ? parameters.pCreditSource
                                    : std::make_shared<CreditSource>(
                                          parameters.externals.pCreditSystem)) {
+#pragma region das
+  this->mbNeedWaitForLoad = this->_pOwner->mbNeedWaitForLoad;
+#pragma endregion
   CESIUM_ASSERT(
       this->_pCreditSource->getCreditSystem() ==
       parameters.externals.pCreditSystem.get());

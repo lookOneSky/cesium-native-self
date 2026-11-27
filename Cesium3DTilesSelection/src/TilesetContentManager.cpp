@@ -1,4 +1,7 @@
 #include "TilesetContentManager.h"
+#pragma region das
+#include <Cesium3DTilesSelection/Tileset.h>
+#pragma endregion
 
 #include "LayerJsonTerrainLoader.h"
 #include "RasterOverlayUpsampler.h"
@@ -570,6 +573,9 @@ postProcessContentInWorkerThread(
 
   auto asyncSystem = tileLoadInfo.asyncSystem;
 
+#pragma region das
+  result.tileBoundingVolume = tileLoadInfo.tileBoundingVolume;
+#pragma endregion
   result.initialBoundingVolume = tileLoadInfo.tileBoundingVolume;
   result.initialContentBoundingVolume = tileLoadInfo.tileContentBoundingVolume;
 
@@ -728,9 +734,16 @@ TilesetContentManager::createFromLoader(
 TilesetContentManager::createFromUrl(
     const TilesetExternals& externals,
     const TilesetOptions& tilesetOptions,
-    const std::string& url) {
+#pragma region das
+    const std::string& url,
+    const DasTilesetExtra& dasExtra) {
+#pragma endregion
   IntrusivePointer<TilesetContentManager> pManager =
       new TilesetContentManager(externals, tilesetOptions);
+#pragma region das
+
+  pManager->_dTerrainAddHeight = dasExtra.dTerrainAddHeight;
+#pragma endregion
 
   if (!url.empty()) {
     pManager->notifyTileStartLoading(nullptr);
@@ -739,15 +752,25 @@ TilesetContentManager::createFromUrl(
 
     externals.pAssetAccessor
         ->get(externals.asyncSystem, url, pManager->_requestHeaders)
+#pragma region das
+        .thenInMainThread([pManager](const std::shared_ptr<CesiumAsync::IAssetRequest>& pCompletedRequest)
+        {
+          return std::make_pair(pCompletedRequest, pManager->_heightPolygons);
+        })
+#pragma endregion
         .thenInWorkerThread(
             [externals,
              ellipsoid,
              pLogger = externals.pLogger,
              asyncSystem = externals.asyncSystem,
              pAssetAccessor = externals.pAssetAccessor,
-             contentOptions = tilesetOptions.contentOptions](
-                const std::shared_ptr<CesiumAsync::IAssetRequest>&
-                    pCompletedRequest) {
+#pragma region das
+             contentOptions = tilesetOptions.contentOptions,
+             dTerrainAddHeight = dasExtra.dTerrainAddHeight](
+                std::pair<std::shared_ptr<CesiumAsync::IAssetRequest>, std::vector<CesiumGeospatial::DasHeightCartographicPolygon>>&& requestAndPolygons) {
+              const auto& pCompletedRequest = requestAndPolygons.first;
+              const auto& heightPolygons = requestAndPolygons.second;
+#pragma endregion
               // Check if request is successful
               const CesiumAsync::IAssetResponse* pResponse =
                   pCompletedRequest->response();
@@ -797,7 +820,10 @@ TilesetContentManager::createFromUrl(
                            url,
                            pCompletedRequest->headers(),
                            std::move(tilesetJson),
-                           ellipsoid)
+#pragma region das
+                           ellipsoid,
+                           &heightPolygons)
+#pragma endregion
                     .thenImmediately(
                         [](TilesetContentLoaderResult<TilesetContentLoader>&&
                                result) { return std::move(result); });
@@ -821,7 +847,10 @@ TilesetContentManager::createFromUrl(
                              url,
                              flatHeaders,
                              tilesetJson,
-                             ellipsoid)
+#pragma region das
+                             ellipsoid,
+                             dTerrainAddHeight)
+#pragma endregion
                       .thenImmediately(
                           [](TilesetContentLoaderResult<TilesetContentLoader>&&
                                  result) { return std::move(result); });
@@ -1254,6 +1283,13 @@ void TilesetContentManager::loadTileContent(
   // Keep the manager alive while the load is in progress.
   CesiumUtility::IntrusivePointer<TilesetContentManager> thiz = this;
 
+#pragma region das
+  if (const std::string* pTileID = std::get_if<std::string>(&tile.getTileID()))
+  {
+    this->mloadingTiles.push_back(*pTileID);
+  }
+
+#pragma endregion
   pLoader->loadTileContent(loadInput)
       .thenImmediately([asyncSystem = this->_externals.asyncSystem,
                         pAssetAccessor = this->_externals.pAssetAccessor,
@@ -1685,7 +1721,10 @@ void TilesetContentManager::markTileEligibleForContentUnloading(Tile& tile) {
 
 void TilesetContentManager::unloadCachedBytes(
     int64_t maximumCachedBytes,
-    double timeBudgetMilliseconds) {
+#pragma region das
+    double timeBudgetMilliseconds,
+    Tileset* pDasTileset) {
+#pragma endregion
   Tile* pTile = this->_unloadQueue.head();
 
   // A time budget of 0.0 indicates we shouldn't throttle cache unloads. So set
@@ -1706,7 +1745,37 @@ void TilesetContentManager::unloadCachedBytes(
 
     Tile* pNext = this->_unloadQueue.next(*pTile);
 
+#pragma region das
+    if (pDasTileset)
+    {
+      bool bKeepLevel0 = pDasTileset->mbRemainlevel0;
+      for (const Tile* pParent = pTile->getParent(); bKeepLevel0 && pParent; pParent = pParent->getParent())
+      {
+        bKeepLevel0 = !pParent->isRenderContent();
+      }
+      if (pTile->isSlowLoad() || bKeepLevel0)
+      {
+        pTile = pNext;
+        continue;
+      }
+      if (pDasTileset->mnRemainDestorySize && pTile->computeByteSize() > *pDasTileset->mnRemainDestorySize)
+      {
+        break;
+      }
+      if (pDasTileset->mnRemainDestorySize)
+      {
+        *pDasTileset->mnRemainDestorySize -= pTile->computeByteSize();
+      }
+    }
+
+#pragma endregion
     const UnloadTileContentResult removed = this->unloadTileContent(*pTile);
+#pragma region das
+    if (pDasTileset && removed != UnloadTileContentResult::Keep)
+    {
+      ++pDasTileset->mnDestoryTiles;
+    }
+#pragma endregion
     if (removed != UnloadTileContentResult::Keep) {
       this->_unloadQueue.markIneligible(*pTile);
     }
@@ -1894,7 +1963,10 @@ private:
 } // namespace
 
 void TilesetContentManager::processWorkerThreadLoadRequests(
-    const TilesetOptions& options) {
+#pragma region das
+    const TilesetOptions& options,
+    Tileset* pDasTileset) {
+#pragma endregion
   // Exit early if there are no loading slots available.
   if (this->getNumberOfTilesLoading() >=
       int32_t(options.maximumSimultaneousTileLoads)) {
@@ -1911,6 +1983,12 @@ void TilesetContentManager::processWorkerThreadLoadRequests(
 
   while (this->getNumberOfTilesLoading() <
          int32_t(options.maximumSimultaneousTileLoads)) {
+#pragma region das
+    if (pDasTileset && pDasTileset->mnRemainloadedTile && *pDasTileset->mnRemainloadedTile <= 0)
+    {
+      break;
+    }
+#pragma endregion
     Tile* pToLoad = wrr.getNextTileToLoad();
     if (pToLoad == nullptr)
       break;
@@ -1921,12 +1999,24 @@ void TilesetContentManager::processWorkerThreadLoadRequests(
     if (pToLoad->_referenceCount == 0)
       continue;
 
+#pragma region das
+    int32_t nLoadingBefore = this->getNumberOfTilesLoading();
+#pragma endregion
     this->loadTileContent(*pToLoad, options);
+#pragma region das
+    if (pDasTileset && pDasTileset->mnRemainloadedTile && this->getNumberOfTilesLoading() > nLoadingBefore)
+    {
+      --*pDasTileset->mnRemainloadedTile;
+    }
+#pragma endregion
   }
 }
 
 void TilesetContentManager::processMainThreadLoadRequests(
-    const TilesetOptions& options) {
+#pragma region das
+    const TilesetOptions& options,
+    Tileset* pDasTileset) {
+#pragma endregion
   WeightedRoundRobin wrr{
       this->_roundRobinValueMain,
       this->_requesters,
@@ -1952,7 +2042,28 @@ void TilesetContentManager::processMainThreadLoadRequests(
     if (pToLoad->_referenceCount == 0)
       continue;
 
+#pragma region das
+    if (!pToLoad->needsMainThreadLoading(this->_externals.pGltfModifier.get()))
+    {
+      continue;
+    }
+    if (pDasTileset && pDasTileset->mnRemainCreateSize)
+    {
+      int64_t nNeedSize = pToLoad->computeByteSize();
+      if (nNeedSize > *pDasTileset->mnRemainCreateSize)
+      {
+        break;
+      }
+      *pDasTileset->mnRemainCreateSize -= nNeedSize;
+    }
+#pragma endregion
     this->finishLoading(*pToLoad, options);
+#pragma region das
+    if (pDasTileset)
+    {
+      ++pDasTileset->mnCreatedTiles;
+    }
+#pragma endregion
 
     auto time = std::chrono::system_clock::now();
     if (timeBudget > 0.0 && time >= end) {
@@ -2280,4 +2391,28 @@ TilesetContentManager::registerGltfModifier(const Tile* pRootTile) {
   return this->getExternals().asyncSystem.createResolvedFuture();
 }
 
+#pragma region das
+void TilesetContentManager::addHeightPolygon(const CesiumGeospatial::DasHeightCartographicPolygon& polygon)
+{
+    _heightPolygons.emplace_back(polygon);
+}
+
+void TilesetContentManager::clearHeightPolygons()
+{
+  _heightPolygons.clear();
+}
+
+std::vector<CesiumGeospatial::DasHeightCartographicPolygon> TilesetContentManager::getHeightPolygons()
+{
+  return _heightPolygons;
+}
+
+void TilesetContentManager::setTerrainAddHeight(double addHeight)
+{
+  _dTerrainAddHeight = addHeight;
+}
+
+
+
+#pragma endregion
 } // namespace Cesium3DTilesSelection

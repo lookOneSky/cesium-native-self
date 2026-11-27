@@ -73,6 +73,14 @@ RasterMappedTo3DTile::RasterMappedTo3DTile(
       _state(AttachmentState::Unattached),
       _originalFailed(false) {
   CESIUM_ASSERT(this->_pLoadingTile != nullptr);
+#pragma region das
+  this->mbNeedWaitForLoad = this->_pLoadingTile->getTileProvider().mbNeedWaitForLoad;
+}
+
+RasterMappedTo3DTile::~RasterMappedTo3DTile()
+{
+  this->mbDestroyed = true;
+#pragma endregion
 }
 
 RasterOverlayTile::MoreDetailAvailable RasterMappedTo3DTile::update(
@@ -378,9 +386,13 @@ RasterMappedTo3DTile* addRealTile(
         textureCoordinateIndex);
   } else {
     // No precise rectangle yet, so return a placeholder for now.
-    return &tile.getMappedRasterTiles().emplace_back(
-        activatedOverlay.getPlaceholderTile(),
-        textureCoordinateIndex);
+#pragma region das
+    auto pPlaceholder = activatedOverlay.getPlaceholderTile();
+    pPlaceholder->debugTilePointer = &tile;
+    auto& mapped = tile.getMappedRasterTiles().emplace_back(pPlaceholder, textureCoordinateIndex);
+    pPlaceholder->debugRasterMappedPointer = &mapped;
+    return &mapped;
+#pragma endregion
   }
 }
 

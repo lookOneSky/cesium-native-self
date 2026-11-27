@@ -60,6 +60,10 @@ public:
       const CesiumUtility::IntrusivePointer<
           CesiumRasterOverlays::RasterOverlayTile>& pRasterTile,
       int32_t textureCoordinateIndex);
+#pragma region das
+
+  ~RasterMappedTo3DTile();
+#pragma endregion
 
   /**
    * @brief Returns a @ref CesiumRasterOverlays::RasterOverlayTile that is
@@ -176,6 +180,14 @@ public:
    */
   bool isMoreDetailAvailable() const noexcept;
 
+#pragma region das
+  /** @brief Whether the requested image failed and an ancestor may be used. */
+  bool hasOriginalTileFailed() const noexcept
+  {
+    return this->_originalFailed;
+  }
+
+#pragma endregion
   /**
    * @brief Detach the raster from the given tile.
    * @param prepareRendererResources The IPrepareRendererResources used to
@@ -246,6 +258,12 @@ private:
   glm::dvec2 _scale;
   AttachmentState _state;
   bool _originalFailed;
+#pragma region das
+
+  bool mbDestroyed = false;
+public:
+  bool mbNeedWaitForLoad = true;//polyogon无缝替换
+#pragma endregion
 };
 
 } // namespace Cesium3DTilesSelection

@@ -57,6 +57,10 @@ public:
       const std::span<const std::byte>& data,
       const Ktx2TranscodeTargets& ktx2TranscodeTargets);
 
+#pragma region das
+  static ImageReaderResult readImageSrc(const std::span<const std::byte>& data, const Ktx2TranscodeTargets& ktx2TranscodeTargets);
+
+#pragma endregion
   /**
    * @brief Generate mipmaps for this image.
    *

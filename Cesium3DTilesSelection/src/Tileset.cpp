@@ -74,7 +74,10 @@ Tileset::Tileset(
 Tileset::Tileset(
     const TilesetExternals& externals,
     const std::string& url,
-    const TilesetOptions& options)
+#pragma region das
+    const TilesetOptions& options,
+    const DasTilesetExtra& dasExtra)
+#pragma endregion
     : _externals(externals),
       _asyncSystem(externals.asyncSystem),
       _options(options),
@@ -84,7 +87,10 @@ Tileset::Tileset(
           TilesetContentManager::createFromUrl(
               this->_externals,
               this->_options,
-              url),
+#pragma region das
+              url,
+              dasExtra),
+#pragma endregion
       },
       _heightRequests(),
       _defaultViewGroup() {}
@@ -432,7 +438,10 @@ const ViewUpdateResult& Tileset::updateViewGroup(
         this->_options,
         this->_externals,
         this->_distances,
-        this->_childOcclusionProxies};
+#pragma region das
+        this->_childOcclusionProxies,
+        this->_boundingVolumeBottomExtension};
+#pragma endregion
     selectTiles(ctx, frameState, *pRootTile, result);
     viewGroup.finishFrame(*this, frameState);
   } else {
@@ -468,15 +477,27 @@ void Tileset::loadTiles() {
         this->getAsyncSystem(),
         *this->_pTilesetContentManager,
         this->_options,
-        this->_heightRequests);
+#pragma region das
+        this->_heightRequests,
+        this->mbSampleHeightSmallestDetailed);
+#pragma endregion
   }
 
+#pragma region das
+  this->mnCreatedTiles = 0;
+  this->mnDestoryTiles = 0;
+#pragma endregion
   this->_pTilesetContentManager->unloadCachedBytes(
       this->_options.maximumCachedBytes,
-      this->_options.tileCacheUnloadTimeLimit);
-  this->_pTilesetContentManager->processWorkerThreadLoadRequests(
-      this->_options);
-  this->_pTilesetContentManager->processMainThreadLoadRequests(this->_options);
+#pragma region das
+      this->_options.tileCacheUnloadTimeLimit,
+      this);
+  if (this->mbEanbleLoad)
+  {
+    this->_pTilesetContentManager->processWorkerThreadLoadRequests(this->_options, this);
+  }
+  this->_pTilesetContentManager->processMainThreadLoadRequests(this->_options, this);
+#pragma endregion
   for (const IntrusivePointer<ActivatedRasterOverlay>& pOverlay :
        this->_pTilesetContentManager->getRasterOverlayCollection()
            .getActivatedOverlays()) {
@@ -607,4 +628,233 @@ const TilesetViewGroup& Tileset::getDefaultViewGroup() const {
   return this->_defaultViewGroup;
 }
 
+#pragma region das
+int Tileset::getTileInLoadedQueue()
+{
+  int nTileLoading = this->_pTilesetContentManager->getNumberOfTilesLoading();
+  return nTileLoading;
+
+}
+
+const ViewUpdateResult& Tileset::getViewUpdateResult()
+{
+  return this->_defaultViewGroup.getViewUpdateResult();
+}
+
+int Tileset::numCreateTile() {
+  return mnCreatedTiles;
+}
+
+int Tileset::numDestoryTile() {
+  return mnDestoryTiles; }
+
+void Tileset::enableLoad(bool bEnable)
+{ mbEanbleLoad = bEnable; }
+
+void Tileset::processLoad() { this->_pTilesetContentManager->processWorkerThreadLoadRequests(this->_options, this); }
+
+std::vector<Tileset::TileLoadTask>* Tileset::getLoadQueuePtr() {
+  return &this->_defaultViewGroup._workerThreadLoadQueue;
+}
+
+std::vector<Tile*>* Tileset::getHeightQueryLoadQueuePtr() {
+  this->mvecHeightQueryLoadQueue.clear();
+  for (const TilesetHeightRequest& request : this->_heightRequests)
+  {
+    this->mvecHeightQueryLoadQueue.insert(this->mvecHeightQueryLoadQueue.end(), request.tilesToLoad.begin(), request.tilesToLoad.end());
+  }
+  return &this->mvecHeightQueryLoadQueue;
+}
+
+void Tileset::beginLoadAllTilesOnce()
+{
+  mbBeginLoad = true;
+  msetLoadedTiles.clear();
+}
+
+void Tileset::updateLoadAllTilesOnce()
+{
+  if (!mbBeginLoad)
+  {
+    return;
+  }
+
+	//获取rootTile
+	Tile* pRootTile = this->getRootTile();
+  if (!pRootTile)
+  {
+    return;
+  }
+
+  std::vector<Tile*> vecTiles;
+  int nMaxLoad = 8;
+  int nNum = nMaxLoad - _pTilesetContentManager->getNumberOfTilesLoading();
+  if (nNum <= 0)
+  {
+    return;
+  }
+
+	collectNotLoadTile(vecTiles, pRootTile, nNum);
+	for (Tile* pTile : vecTiles)
+	{
+    Tile::Pointer pKeepAlive(pTile);
+    _pTilesetContentManager->loadTileContent(*pTile, _options);
+	}
+}
+
+
+bool Tileset::allChildLoaded(Tile* pTile)
+{
+  if (!pTile)
+  {
+    return true;
+  }
+
+	std::span<Tile> childs = pTile->getChildren();
+  for (Tile& item : childs)
+  {
+    if (!allChildLoaded(&item))
+    {
+      return false;
+    }
+  }
+
+	const TileID& id = pTile->getTileID();
+	const std::string* pString = std::get_if<std::string>(&id);
+  if (pString && msetLoadedTiles.find(*pString) == msetLoadedTiles.end())
+  {
+    return false;
+  }
+
+  return true;
+}
+
+bool Tileset::addNotLoadTileToLoad(std::vector<Tile*>& vecTiles, Tile* pTile, int nNeed)
+{
+  const TileID& id = pTile->getTileID();
+  const std::string* pString = std::get_if<std::string>(&id);
+  if (!pString)
+  {
+    return true;
+  }
+
+	if (msetLoadedTiles.find(*pString) != msetLoadedTiles.end())
+	{
+    //加载后直接卸载
+    if (allChildLoaded(pTile))
+    {
+			_pTilesetContentManager->unloadTileContent(*pTile);
+    }
+
+    return true;
+	}
+
+  if (vecTiles.size() < static_cast<size_t>(nNeed))
+  {
+    vecTiles.push_back(pTile);
+    msetLoadedTiles.insert(*pString);
+    return true;
+  }
+
+  return false;
+}
+
+bool Tileset::collectNotLoadTile(std::vector<Tile*>& vecTiles, Tile* pRoot, int nNeed)
+{
+	//左、中、右的方式递归，push未加载的Tile到vecTiles
+	if (pRoot == nullptr)
+	{
+		return false;
+	}
+
+  //pRoot获取所有child
+  std::span<Tile> childs = pRoot->getChildren();
+  for (Tile& item : childs)
+  {
+    collectNotLoadTile(vecTiles, &item, nNeed);
+    if (vecTiles.size() == static_cast<size_t>(nNeed))
+    {
+      return true;
+    }
+  }
+
+  addNotLoadTileToLoad(vecTiles, pRoot, nNeed);
+
+  return true;
+}
+
+void Tileset::setBoundingVolumeBottomExtension(double extension)
+{
+	_boundingVolumeBottomExtension = extension;
+}
+
+double Tileset::getBoundingVolumeBottomExtension() const
+{
+	return _boundingVolumeBottomExtension;
+}
+
+bool Tileset::getLoadedTiles(std::vector<std::string>& vecTiles)
+{
+  if (!_pTilesetContentManager)
+  {
+    return false;
+  }
+
+  vecTiles = _pTilesetContentManager->mloadingTiles;
+
+  return true;
+}
+
+void Tileset::clearLoadedTiles()
+{
+  _pTilesetContentManager->mloadingTiles.clear();
+}
+
+void Tileset::setPolygonProtection(const CesiumGeospatial::CartographicPolygon& polygon)
+{
+  // 进行值拷贝，使用原始多边形的顶点数据创建新的 CartographicPolygon 对象
+  _polygonProtection = std::make_shared<CesiumGeospatial::CartographicPolygon>(polygon.getVertices());
+}
+
+void Tileset::clearPolygonProtection()
+{
+  _polygonProtection.reset();
+}
+
+std::shared_ptr<const CesiumGeospatial::CartographicPolygon> Tileset::getPolygonProtection() const
+{
+  return _polygonProtection;
+}
+
+
+void Tileset::addHeightPolygon(const CesiumGeospatial::DasHeightCartographicPolygon& polygon)
+{
+  // 添加多边形到数组
+  if (_pTilesetContentManager)
+  {
+    _pTilesetContentManager->addHeightPolygon(polygon);
+  }
+}
+
+void Tileset::clearHeightPolygons()
+{
+  if (_pTilesetContentManager)
+  {
+    _pTilesetContentManager->clearHeightPolygons();
+  }
+}
+
+std::vector<CesiumGeospatial::DasHeightCartographicPolygon> Tileset::getHeightPolygons() const
+{
+  std::vector<CesiumGeospatial::DasHeightCartographicPolygon> vecPolygons;
+  if (_pTilesetContentManager)
+  {
+    vecPolygons = _pTilesetContentManager->getHeightPolygons();
+  }
+
+  return vecPolygons;
+}
+
+
+#pragma endregion
 } // namespace Cesium3DTilesSelection

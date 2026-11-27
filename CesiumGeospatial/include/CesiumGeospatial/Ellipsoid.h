@@ -46,6 +46,11 @@ public:
    * https://earth-info.nga.mil/GandG/publications/tr8350.2/wgs84fin.pdf.
    */
   static /*constexpr*/ const Ellipsoid WGS84;
+#pragma region das
+
+  static /*constexpr*/ const Ellipsoid CGCS2000;
+
+#pragma endregion
 
   /**
    * @brief An Ellipsoid with all three radii set to one meter.

@@ -616,7 +616,10 @@ Cesium3DTilesSelection::LayerJsonTerrainLoader::createLoader(
     const std::string& layerJsonUrl,
     const std::vector<CesiumAsync::IAssetAccessor::THeader>& requestHeaders,
     const rapidjson::Document& layerJson,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+#pragma region das
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+    double dTerrainAddHeight) {
+#pragma endregion
   return loadLayerJson(
              asyncSystem,
              pAssetAccessor,
@@ -626,11 +629,19 @@ Cesium3DTilesSelection::LayerJsonTerrainLoader::createLoader(
              contentOptions.enableWaterMask,
              ellipsoid)
       .thenInMainThread([ellipsoid,
-                         requestHeaders](LoadLayersResult&& loadLayersResult) {
-        return convertToTilesetContentLoaderResult(
+#pragma region das
+                         requestHeaders, dTerrainAddHeight](LoadLayersResult&& loadLayersResult) {
+        auto result = convertToTilesetContentLoaderResult(
+#pragma endregion
             ellipsoid,
             std::vector<CesiumAsync::IAssetAccessor::THeader>(requestHeaders),
             std::move(loadLayersResult));
+#pragma region das
+        if (result.pLoader) {
+          result.pLoader->setTerrainAddHeight(dTerrainAddHeight);
+        }
+        return result;
+#pragma endregion
       });
 }
 
@@ -707,7 +718,11 @@ Future<QuantizedMeshLoadResult> requestTileContent(
     const LayerJsonTerrainLoader::Layer& layer,
     const std::vector<IAssetAccessor::THeader>& requestHeaders,
     bool enableWaterMask,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+#pragma region das
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+    double addHeight
+) {
+#pragma endregion
   std::string url = resolveTileUrl(tileID, layer);
   return pAssetAccessor->get(asyncSystem, url, requestHeaders)
       .thenInWorkerThread([ellipsoid,
@@ -715,7 +730,11 @@ Future<QuantizedMeshLoadResult> requestTileContent(
                            pLogger,
                            tileID,
                            boundingRegion,
-                           enableWaterMask](
+#pragma region das
+                           enableWaterMask,
+                           addHeight
+](
+#pragma endregion
                               std::shared_ptr<IAssetRequest>&& pRequest) {
         const IAssetResponse* pResponse = pRequest->response();
         if (!pResponse) {
@@ -744,7 +763,10 @@ Future<QuantizedMeshLoadResult> requestTileContent(
             pRequest->url(),
             pResponse->data(),
             enableWaterMask,
-            ellipsoid);
+#pragma region das
+            ellipsoid,
+            addHeight);
+#pragma endregion
       });
 }
 
@@ -872,7 +894,10 @@ LayerJsonTerrainLoader::loadTileContent(const TileLoadInput& loadInput) {
       currentLayer,
       requestHeaders,
       contentOptions.enableWaterMask,
-      ellipsoid);
+#pragma region das
+      ellipsoid,
+      _dTerrainAddHeight);
+#pragma endregion
 
   // determine if this tile is at the availability level of the current layer
   // and if we need to add the availability rectangles to the current layer. We

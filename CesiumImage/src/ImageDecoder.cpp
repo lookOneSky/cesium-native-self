@@ -60,6 +60,13 @@ bool isWebP(const std::span<const std::byte>& data) {
 }
 
 } // namespace
+#pragma region das
+
+ImageReaderResult ImageDecoder::readImageSrc(const std::span<const std::byte>& data, const Ktx2TranscodeTargets& ktx2TranscodeTargets)
+{
+  return readImage(data, ktx2TranscodeTargets);
+}
+#pragma endregion
 
 /*static*/
 ImageReaderResult ImageDecoder::readImage(

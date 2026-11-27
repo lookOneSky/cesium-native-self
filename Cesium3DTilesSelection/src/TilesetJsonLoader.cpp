@@ -78,6 +78,15 @@
 
 using namespace Cesium3DTiles;
 using namespace Cesium3DTilesReader;
+#pragma region das
+#include <chrono>
+#include "Cesium3DTilesContent/B3dmToGltfConverter.h"
+
+#include <CesiumGeospatial/Cartographic.h>
+#include <CesiumGeospatial/Das/DasCartographicPolygon.h>
+
+using namespace CesiumUtility;
+#pragma endregion
 using namespace Cesium3DTilesContent;
 using namespace CesiumUtility;
 
@@ -301,6 +310,131 @@ CesiumAsync::Future<JsonFetcherResult> getJson(
             }
             return JsonFetcherResult(std::move(jsonContent));
           });
+#pragma region das
+}
+/**
+ * @brief 根据高度多边形数组调整包围盒
+ * @param boundingVolume 原始包围盒（支持BoundingRegion、OrientedBoundingBox、BoundingSphere）
+ * @param heightPolygons 高度编辑多边形数组
+ * @param ellipsoid 椭球体
+ * @return 调整后的包围盒
+ */
+BoundingVolume adjustBoundingVolumeWithHeightPolygons(
+    const BoundingVolume& boundingVolume,
+    const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>& heightPolygons,
+    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+
+  if (heightPolygons.empty()) {
+    return boundingVolume;
+  }
+
+  // 使用estimateGlobeRectangle转换BoundingVolume为GlobeRectangle
+  std::optional<CesiumGeospatial::GlobeRectangle> tileRectOpt =
+      Cesium3DTilesSelection::estimateGlobeRectangle(boundingVolume, ellipsoid);
+
+  if (!tileRectOpt.has_value()) {
+    return boundingVolume;
+  }
+
+  const CesiumGeospatial::GlobeRectangle& tileRect = tileRectOpt.value();
+
+  // 获取原始高度范围（根据不同的包围盒类型）
+  double minHeight = -1000.0;
+  double maxHeight = 10000.0;
+
+  // 尝试从BoundingRegion获取高度信息
+  const CesiumGeospatial::BoundingRegion* pRegion =
+      std::get_if<CesiumGeospatial::BoundingRegion>(&boundingVolume);
+  if (pRegion) {
+    minHeight = pRegion->getMinimumHeight();
+    maxHeight = pRegion->getMaximumHeight();
+  } else {
+    // 对于OrientedBoundingBox和BoundingSphere，通过其顶点估算高度范围
+    const CesiumGeometry::OrientedBoundingBox* pOBB =
+        std::get_if<CesiumGeometry::OrientedBoundingBox>(&boundingVolume);
+    if (pOBB) {
+      // 计算OBB的8个顶点
+      const glm::dvec3& center = pOBB->getCenter();
+      const glm::dmat3& halfAxes = pOBB->getHalfAxes();
+
+      constexpr glm::dvec3 vertices[] = {
+          glm::dvec3(1.0, 1.0, 1.0),   glm::dvec3(1.0, 1.0, -1.0),
+          glm::dvec3(1.0, -1.0, 1.0),  glm::dvec3(1.0, -1.0, -1.0),
+          glm::dvec3(-1.0, 1.0, 1.0),  glm::dvec3(-1.0, 1.0, -1.0),
+          glm::dvec3(-1.0, -1.0, 1.0), glm::dvec3(-1.0, -1.0, -1.0)};
+
+      minHeight = std::numeric_limits<double>::max();
+      maxHeight = std::numeric_limits<double>::lowest();
+
+      for (const auto& vertex : vertices) {
+        glm::dvec3 worldPos = center + halfAxes * vertex;
+        std::optional<CesiumGeospatial::Cartographic> carto =
+            ellipsoid.cartesianToCartographic(worldPos);
+        if (carto) {
+          minHeight = std::min(minHeight, carto->height);
+          maxHeight = std::max(maxHeight, carto->height);
+        }
+      }
+    } else {
+      // BoundingSphere的情况
+      const CesiumGeometry::BoundingSphere* pSphere =
+          std::get_if<CesiumGeometry::BoundingSphere>(&boundingVolume);
+      if (pSphere) {
+        const glm::dvec3& center = pSphere->getCenter();
+        double radius = pSphere->getRadius();
+
+        std::optional<CesiumGeospatial::Cartographic> centerCarto =
+            ellipsoid.cartesianToCartographic(center);
+        if (centerCarto) {
+          minHeight = centerCarto->height - radius;
+          maxHeight = centerCarto->height + radius;
+        }
+      }
+    }
+  }
+
+  bool bHasIntersection = false;
+
+  // 遍历所有高度多边形，检查是否与tile相交
+  for (const CesiumGeospatial::DasHeightCartographicPolygon& heightPolygon :
+       heightPolygons) {
+    const CesiumGeospatial::CartographicPolygon& polygon = heightPolygon.getPolygon();
+
+    // 获取多边形的外包矩形
+    const std::optional<CesiumGeospatial::GlobeRectangle>& polygonRect =
+        polygon.getBoundingRectangle();
+    if (!polygonRect.has_value()) {
+      continue;
+    }
+
+    // 检查矩形是否相交
+    bool bRectsIntersect = !(tileRect.getEast() < polygonRect->getWest() ||
+                             tileRect.getWest() > polygonRect->getEast() ||
+                             tileRect.getNorth() < polygonRect->getSouth() ||
+                             tileRect.getSouth() > polygonRect->getNorth());
+
+    if (bRectsIntersect) {
+      bHasIntersection = true;
+      double polygonHeight = heightPolygon.getHeight();
+      // 扩展包围盒以包含多边形的高度
+      minHeight = std::min(minHeight, polygonHeight);
+      minHeight -= 1.0; // 精度问题
+      maxHeight = std::max(maxHeight, polygonHeight);
+    }
+  }
+
+  // 如果有相交，返回扩展后的包围盒（统一转换为BoundingRegion）
+  if (bHasIntersection) {
+    CesiumGeospatial::BoundingRegion adjustedRegion(
+        tileRect,
+        minHeight,
+        maxHeight,
+        ellipsoid);
+    return adjustedRegion;
+  }
+
+  return boundingVolume;
+#pragma endregion
 }
 
 void createImplicitQuadtreeLoader(
@@ -545,6 +679,14 @@ std::optional<Tile> parseTileJsonRecursively(
   auto tileBoundingVolume =
       transformBoundingVolume(tileTransform, boundingVolume.value());
 
+#pragma region das
+  // 根据高度多边形调整包围盒
+  tileBoundingVolume = adjustBoundingVolumeWithHeightPolygons(
+      tileBoundingVolume,
+      currentLoader.getHeightPolygons(),
+      ellipsoid);
+
+#pragma endregion
   // parse viewer request volume
   std::optional<BoundingVolume> tileViewerRequestVolume =
       getBoundingVolumeProperty(tileJson, "viewerRequestVolume", ellipsoid);
@@ -687,6 +829,14 @@ std::optional<Tile> parseTileJsonRecursively(
       tileContentBoundingVolume = transformBoundingVolume(
           tileTransform,
           tileContentBoundingVolume.value());
+#pragma region das
+
+      // 根据高度多边形调整content包围盒
+      tileContentBoundingVolume = adjustBoundingVolumeWithHeightPolygons(
+          tileContentBoundingVolume.value(),
+          currentLoader.getHeightPolygons(),
+          ellipsoid);
+#pragma endregion
     }
   }
 
@@ -733,12 +883,23 @@ TilesetContentLoaderResult<TilesetJsonLoader> parseTilesetJson(
     const rapidjson::Document& tilesetJson,
     const glm::dmat4& parentTransform,
     TileRefine parentRefine,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+#pragma region das
+    const CesiumGeospatial::Ellipsoid& ellipsoid
+    ,const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>* pHeightPolygons = nullptr
+) {
+#pragma endregion
   std::unique_ptr<Tile> pRootTile;
   auto gltfUpAxis = obtainGltfUpAxis(tilesetJson, pLogger);
   auto pLoader =
       std::make_unique<TilesetJsonLoader>(baseUrl, gltfUpAxis, ellipsoid);
   std::optional<ExtensionContent3dTilesContentVoxels> voxelExtension;
+#pragma region das
+
+  // 设置高度多边形
+  if (pHeightPolygons) {
+    pLoader->setHeightPolygons(*pHeightPolygons);
+  }
+#pragma endregion
 
   const auto rootIt = tilesetJson.FindMember("root");
   if (rootIt != tilesetJson.MemberEnd()) {
@@ -826,7 +987,10 @@ TileLoadResult parseExternalTilesetInWorkerThread(
     std::shared_ptr<CesiumAsync::IAssetRequest>&& pCompletedRequest,
     ExternalContentInitializer&& externalContentInitializer,
     const CesiumGeospatial::Ellipsoid& ellipsoid,
-    rapidjson::Document&& tilesetJson) {
+#pragma region das
+    rapidjson::Document&& tilesetJson,
+    const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>& heightPolygons) {
+#pragma endregion
   const auto& tileUrl = pCompletedRequest->url();
 
   // Save the parsed external tileset into custom data.
@@ -841,7 +1005,11 @@ TileLoadResult parseExternalTilesetInWorkerThread(
           tilesetJson,
           tileTransform,
           tileRefine,
-          ellipsoid);
+#pragma region das
+          ellipsoid,
+          &heightPolygons
+          );
+#pragma endregion
 
   // Populate the root tile with metadata
   removeRootPropertyAndParseTilesetMetadata(
@@ -888,7 +1056,10 @@ TileLoadResult parseJsonContentInWorkerThread(
     std::shared_ptr<CesiumAsync::IAssetRequest>&& pCompletedRequest,
     ExternalContentInitializer&& externalContentInitializer,
     const CesiumGeospatial::Ellipsoid& ellipsoid,
-    const IntrusivePointer<CesiumGltf::Schema>& pExternalSchema) {
+#pragma region das
+    const IntrusivePointer<CesiumGltf::Schema>& pExternalSchema,
+    const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>& heightPolygons) {
+#pragma endregion
   const CesiumAsync::IAssetResponse* pResponse = pCompletedRequest->response();
   const auto& responseData = pResponse->data();
 
@@ -950,7 +1121,10 @@ TileLoadResult parseJsonContentInWorkerThread(
         std::move(pCompletedRequest),
         std::move(externalContentInitializer),
         ellipsoid,
-        std::move(jsonContent));
+#pragma region das
+        std::move(jsonContent),
+        heightPolygons);
+#pragma endregion
   }
 }
 } // namespace
@@ -1033,7 +1207,10 @@ TilesetJsonLoader::createLoader(
     const std::string& tilesetJsonUrl,
     const CesiumAsync::HttpHeaders& requestHeaders,
     rapidjson::Document&& tilesetJson,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+#pragma region das
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+    const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>* pHeightPolygons) {
+#pragma endregion
   TilesetContentLoaderResult<TilesetJsonLoader> result = parseTilesetJson(
       pLogger,
       tilesetJsonUrl,
@@ -1041,7 +1218,12 @@ TilesetJsonLoader::createLoader(
       tilesetJson,
       glm::dmat4(1.0),
       TileRefine::Replace,
-      ellipsoid);
+#pragma region das
+      ellipsoid,
+      pHeightPolygons
+
+      );
+#pragma endregion
 
   if (!result.pRootTile) {
     return asyncSystem.createResolvedFuture(std::move(result));
@@ -1231,6 +1413,12 @@ TilesetJsonLoader::loadTileContent(const TileLoadInput& loadInput) {
 
   std::string resolvedUrl =
       CesiumUtility::Uri::resolve(this->_baseUrl, *url, true);
+#pragma region das
+
+
+  //logTileLoadResult(pLogger, *url, );
+  // 打印计数值
+#pragma endregion
   return pAssetAccessor->get(asyncSystem, resolvedUrl, requestHeaders)
       .thenInWorkerThread(
           [pLogger,
@@ -1244,7 +1432,10 @@ TilesetJsonLoader::loadTileContent(const TileLoadInput& loadInput) {
            asyncSystem,
            pSharedAssetSystem,
            requestHeaders,
-           pExternalSchema](std::shared_ptr<CesiumAsync::IAssetRequest>&&
+#pragma region das
+           pExternalSchema,
+           heightPolygons = this->_heightPolygons](std::shared_ptr<CesiumAsync::IAssetRequest>&&
+#pragma endregion
                                 pCompletedRequest) mutable {
             auto pResponse = pCompletedRequest->response();
             const std::string& tileUrl = pCompletedRequest->url();
@@ -1300,8 +1491,27 @@ TilesetJsonLoader::loadTileContent(const TileLoadInput& loadInput) {
                        upAxis,
                        tileUrl,
                        pAssetAccessor,
-                       pCompletedRequest = std::move(pCompletedRequest)](
+#pragma region das
+                       pCompletedRequest = std::move(pCompletedRequest), endTime,
+                       url](
+#pragma endregion
                           GltfConverterResult&& result) mutable {
+#pragma region das
+                        auto endTime1 =
+                            std::chrono::high_resolution_clock::now();
+                        auto duration1 =
+                            std::chrono::duration_cast<
+                                std::chrono::milliseconds>(endTime1 - endTime)
+                                .count();
+                        std::string strValue = "converte took " +
+                                               std::to_string(duration1) +
+                                               " ms for URL: " + *url;
+												/*logTileLoadResult(
+														pLogger,
+														*url,
+														ErrorList::warning(strValue));*/
+
+#pragma endregion
                         logTileLoadResult(pLogger, tileUrl, result.errors);
                         if (result.errors) {
                           return TileLoadResult::createFailedResult(
@@ -1333,7 +1543,10 @@ TilesetJsonLoader::loadTileContent(const TileLoadInput& loadInput) {
                       std::move(pCompletedRequest),
                       std::move(externalContentInitializer),
                       ellipsoid,
-                      pExternalSchema));
+#pragma region das
+                      pExternalSchema,
+                      heightPolygons));
+#pragma endregion
             }
           });
 }
@@ -1386,4 +1599,15 @@ CesiumUtility::IntrusivePointer<CesiumGltf::Schema>
 TilesetJsonLoader::getExternalSchema() {
   return this->_pExternalSchema;
 }
+#pragma region das
+void TilesetJsonLoader::setHeightPolygons(
+    const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>& heightPolygons) {
+  this->_heightPolygons = heightPolygons;
+}
+
+const std::vector<CesiumGeospatial::DasHeightCartographicPolygon>&
+TilesetJsonLoader::getHeightPolygons() const noexcept {
+  return this->_heightPolygons;
+}
+#pragma endregion
 } // namespace Cesium3DTilesSelection

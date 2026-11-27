@@ -4,12 +4,26 @@
 #include <CesiumGeospatial/Library.h>
 
 #include <glm/vec2.hpp>
+#pragma region das
+#include <glm/vec4.hpp>
+#pragma endregion
 
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace CesiumGeospatial {
+#pragma region das
+
+/**
+ * @brief Edit type for CartographicPolygon operations.
+ */
+enum class EditType {
+  Edit_Clip,    // Clipping operation
+  Edit_Height,  // Height modification operation
+  Edit_Color    // Color modification operation
+};
+#pragma endregion
 
 /**
  * @brief A 2D polygon expressed as a list of longitude/latitude coordinates in
@@ -96,6 +110,14 @@ private:
   std::vector<glm::dvec2> _vertices;
   std::vector<uint32_t> _indices;
   std::optional<CesiumGeospatial::GlobeRectangle> _boundingRectangle;
+#pragma region das
+
+public:
+  EditType eEditType = EditType::Edit_Clip; // Edit type for polygon operations
+  float fSameHeightCM = 0.0f; // Same height in centimeters
+  glm::vec4 insideColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f); // Color for pixels inside the polygon (RGBA)
+  bool bInnerPolygon = false; // Whether this is an inner polygon (for subtraction)
+#pragma endregion
 };
 
 } // namespace CesiumGeospatial

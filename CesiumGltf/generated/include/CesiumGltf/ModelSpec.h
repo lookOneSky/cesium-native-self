@@ -139,6 +139,10 @@ struct CESIUMGLTF_API ModelSpec : public CesiumUtility::ExtensibleObject {
    */
   std::vector<CesiumGltf::Texture> textures;
 
+#pragma region das
+  bool ignoreLoad = false;//空地融合数据纹理很碎，跳过加载
+
+#pragma endregion
   /**
    * @brief Calculates the size in bytes of this object, including the contents
    * of all collections, pointers, and strings. This will NOT include the size

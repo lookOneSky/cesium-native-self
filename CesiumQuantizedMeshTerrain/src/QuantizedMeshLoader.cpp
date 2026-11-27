@@ -407,7 +407,11 @@ void addSkirt(
     const std::span<float>& normals,
     const std::span<I>& indices,
     glm::dvec3& positionMinimums,
-    glm::dvec3& positionMaximums) {
+#pragma region das
+    glm::dvec3& positionMaximums,
+    double addHeight
+) {
+#pragma endregion
   const double west = rectangle.getWest();
   const double south = rectangle.getSouth();
   const double east = rectangle.getEast();
@@ -427,7 +431,9 @@ void addSkirt(
     const double heightMeters =
         Math::lerp(minimumHeight, maximumHeight, heightRatio) - skirtHeight;
     glm::dvec3 position = ellipsoid.cartographicToCartesian(
-        Cartographic(longitude, latitude, heightMeters));
+#pragma region das
+        Cartographic(longitude, latitude, heightMeters + addHeight));
+#pragma endregion
     position -= center;
 
     positions[positionIdx] = static_cast<float>(position.x);
@@ -481,7 +487,11 @@ void addSkirts(
     const std::span<float>& outputNormals,
     const std::span<I>& outputIndices,
     glm::dvec3& positionMinimums,
-    glm::dvec3& positionMaximums) {
+#pragma region das
+    glm::dvec3& positionMaximums,
+    double addHeight
+) {
+#pragma endregion
   const uint32_t westVertexCount =
       static_cast<uint32_t>(westEdgeIndicesBuffer.size() / sizeof(E));
   const uint32_t southVertexCount =
@@ -528,7 +538,10 @@ void addSkirts(
       outputNormals,
       outputIndices,
       positionMinimums,
-      positionMaximums);
+#pragma region das
+      positionMaximums,
+      addHeight);
+#pragma endregion
 
   currentVertexCount += westVertexCount;
   currentIndicesCount += (westVertexCount - 1) * 6;
@@ -561,7 +574,10 @@ void addSkirts(
       outputNormals,
       outputIndices,
       positionMinimums,
-      positionMaximums);
+#pragma region das
+      positionMaximums,
+      addHeight);
+#pragma endregion
 
   currentVertexCount += southVertexCount;
   currentIndicesCount += (southVertexCount - 1) * 6;
@@ -594,7 +610,10 @@ void addSkirts(
       outputNormals,
       outputIndices,
       positionMinimums,
-      positionMaximums);
+#pragma region das
+      positionMaximums,
+      addHeight);
+#pragma endregion
 
   currentVertexCount += eastVertexCount;
   currentIndicesCount += (eastVertexCount - 1) * 6;
@@ -627,7 +646,10 @@ void addSkirts(
       outputNormals,
       outputIndices,
       positionMinimums,
-      positionMaximums);
+#pragma region das
+      positionMaximums,
+      addHeight);
+#pragma endregion
 }
 
 static void decodeNormals(
@@ -729,7 +751,11 @@ QuantizedMeshMetadataResult processMetadata(
     const std::string& url,
     const std::span<const std::byte>& data,
     bool enableWaterMask,
-    const CesiumGeospatial::Ellipsoid& ellipsoid) {
+#pragma region das
+    const CesiumGeospatial::Ellipsoid& ellipsoid,
+    double addHeight
+) {
+#pragma endregion
 
   CESIUM_TRACE("Cesium3DTilesSelection::QuantizedMeshLoader::load");
 
@@ -801,7 +827,10 @@ QuantizedMeshMetadataResult processMetadata(
         Math::lerp(minimumHeight, maximumHeight, heightRatio);
 
     glm::dvec3 position = ellipsoid.cartographicToCartesian(
-        Cartographic(longitude, latitude, heightMeters));
+#pragma region das
+        Cartographic(longitude, latitude, heightMeters + addHeight));
+
+#pragma endregion
     position -= center;
     outputPositions[positionOutputIndex++] = static_cast<float>(position.x);
     outputPositions[positionOutputIndex++] = static_cast<float>(position.y);
@@ -890,7 +919,10 @@ QuantizedMeshMetadataResult processMetadata(
         outputNormals,
         outputIndices,
         positionMinimums,
-        positionMaximums);
+#pragma region das
+        positionMaximums,
+        addHeight);
+#pragma endregion
 
     indexSizeBytes = sizeof(uint32_t);
   } else {
@@ -935,7 +967,10 @@ QuantizedMeshMetadataResult processMetadata(
           outputNormals,
           outputIndices,
           positionMinimums,
-          positionMaximums);
+#pragma region das
+          positionMaximums,
+          addHeight);
+#pragma endregion
 
       indexSizeBytes = sizeof(uint16_t);
     } else {
@@ -974,7 +1009,10 @@ QuantizedMeshMetadataResult processMetadata(
           outputNormals,
           outputIndices,
           positionMinimums,
-          positionMaximums);
+#pragma region das
+          positionMaximums,
+          addHeight);
+#pragma endregion
 
       indexSizeBytes = sizeof(uint32_t);
     }
@@ -1188,7 +1226,9 @@ QuantizedMeshMetadataResult processMetadata(
   model.scene = 0;
 
   result.updatedBoundingVolume =
-      BoundingRegion(rectangle, minimumHeight, maximumHeight, ellipsoid);
+#pragma region das
+      BoundingRegion(rectangle, minimumHeight + addHeight, maximumHeight + addHeight, ellipsoid);
+#pragma endregion
 
   if (result.model) {
     result.model->extras["Cesium3DTiles_TileUrl"] = url;
@@ -1254,4 +1294,6 @@ struct TileRange {
   return processMetadata(tileID, meshView->metadataJsonBuffer);
 }
 
+#pragma region das
 } // namespace CesiumQuantizedMeshTerrain
+#pragma endregion
